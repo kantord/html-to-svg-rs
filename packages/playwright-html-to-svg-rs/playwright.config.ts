@@ -14,6 +14,8 @@ const FIXTURES = "http://localhost:5199";
 
 export default defineConfig<HtmlToSvgOptions>({
   testDir: "tests",
+  // Live sites (tests/live) run only as the `live` project: `just live-snapshots`.
+  testIgnore: process.env.HTML_TO_SVG_LIVE ? [] : ["**/live/**"],
   reporter: process.env.CI ? "github" : "list",
   webServer: {
     command: "pnpm --filter test-fixtures build && pnpm --filter test-fixtures preview",
@@ -22,6 +24,9 @@ export default defineConfig<HtmlToSvgOptions>({
   },
   use: { baseURL: FIXTURES, htmlToSvgBinary: binary, viewport: { width: 800, height: 800 } },
   projects: [
+    ...(process.env.HTML_TO_SVG_LIVE
+      ? [{ name: "live", testDir: "tests/live", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } } }]
+      : []),
     { name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 800, height: 800 } } },
     {
       name: "chromium-2x",

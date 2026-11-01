@@ -42,3 +42,10 @@ regression-capture *NAMES: image
       for d in ${0:-*/}; do d=${d%/}; page=$(ls $d/page.* | head -1); \
         /cache/target/debug/html-to-svg capture "http://localhost:8123/crates/html-to-svg-rs/tests/regressions/$page" $d --size 320x240 --settle 0.5; \
       done' "{{NAMES}}"
+
+# Proof of concept on live sites (Hacker News, Google, NYTimes, this repository's GitHub page,
+# shadcn/ui): SVG and PNG snapshots in out/live/<site>/, and out/live/index.html to look at them.
+# Needs the network; not part of `just test`. See packages/playwright-html-to-svg-rs/tests/live/.
+live-snapshots: image
+    {{run}} bash -c 'pnpm install --frozen-lockfile && cargo build -q -p html-to-svg-cli && pnpm --filter playwright-html-to-svg-rs build && cd packages/playwright-html-to-svg-rs && HTML_TO_SVG_LIVE=1 pnpm exec playwright test --project=live --reporter=list; status=$?; node tests/live/gallery.ts; exit $status'
+    -@xdg-open out/live/index.html >/dev/null 2>&1 || echo "open out/live/index.html"
