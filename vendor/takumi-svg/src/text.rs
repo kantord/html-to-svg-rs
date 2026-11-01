@@ -1,0 +1,223 @@
+//! Text / inline-content emission: lays out the inline items, lets takumi-core's text painter
+//! order the shadows, decorations, and outlines, and draws each run's glyphs as outline `<path>`s,
+//! COLR colour layers, or bitmap `<image>`s.
+
+use std::io;
+
+use takumi_core::{
+  font_style::SizedFontStyle,
+  layout::{
+    inline::{InlineBoxKind, PositionedInlineRun, ProcessedInlineSpan, ShapedRun},
+    tree::RenderNode,
+  },
+  painter::{BoxFrame, OwnContent, PaintedInline},
+  path_data::path_data,
+  resources::{font::FontError, glyph::ResolvedGlyph, image::to_data_url},
+  style::Affine,
+};
+
+use crate::{
+  Frame, GlyphStroke, ImageKey, Rgba, SvgDocument,
+  render::{DocumentDevice, emit_inline_box},
+};
+
+/// Emits a node's inline content at its frame: lays out its inline items in the content box,
+/// paints the runs, then recurses into each positioned inline box.
+pub(crate) fn emit_inline_content(
+  node: &RenderNode,
+  frame: BoxFrame,
+  doc: &mut SvgDocument,
+) -> io::Result<()> {
+  let context = &node.context;
+  let font_style = SizedFontStyle::from_style(&context.style, context);
+  let Some(painted) = OwnContent::of(node).lay_out_inline(&font_style, frame.layout) else {
+    return Ok(());
+  };
+  let PaintedInline { spans, runs, .. } = painted.map_err(font_error)?;
+
+  DocumentDevice::paint(doc, |device| {
+    runs.paint(&spans, &font_style, frame, device);
+  })?;
+
+  for inline_box in runs
+    .inline_boxes
+    .iter()
+    .filter(|inline_box| inline_box.kind == InlineBoxKind::InFlow)
+  {
+    if let Some(ProcessedInlineSpan::Box(item)) = spans.get(inline_box.id as usize) {
+      emit_inline_box(inline_box, item, frame, doc)?;
+    }
+  }
+  Ok(())
+}
+
+/// The `-webkit-text-stroke` a run carries. A span may set it for itself, so it
+/// comes off the run; the join is a box-level property and stays with the node.
+pub(crate) fn run_stroke(run: &ShapedRun, font_style: &SizedFontStyle) -> Option<GlyphStroke> {
+  let brush = &run.brush;
+
+  (brush.stroke_width > 0.0 && brush.stroke_color.0[3] != 0).then_some(GlyphStroke {
+    color: Rgba(brush.stroke_color.0),
+    width: brush.stroke_width,
+    join: font_style.parent.misc_inherited_data.stroke_linejoin,
+  })
+}
+
+/// Emits a run's glyphs. `color_override` (for shadows) recolors every glyph and
+/// suppresses bitmaps/COLR; `stroke` adds `-webkit-text-stroke` to outlines.
+pub(crate) fn emit_run_glyphs(
+  run: &PositionedInlineRun,
+  font_style: &SizedFontStyle,
+  frame: BoxFrame,
+  color_override: Option<Rgba>,
+  stroke: Option<GlyphStroke>,
+  doc: &mut SvgDocument,
+) -> io::Result<()> {
+  let run_transform = run.transform(Affine::IDENTITY);
+  let glyph_offset = run.glyph_offset(frame.layout);
+  let fill_color = run.glyph_run.brush.color;
+  let bold_join = font_style.parent.misc_inherited_data.stroke_linejoin;
+
+  // Outline glyphs become `<use>` references to interned outlines, other glyphs paint their own.
+  let fill = color_override.unwrap_or(Rgba(fill_color.0));
+  let mut uses: Vec<(u32, f32, f32)> = Vec::new();
+
+  for glyph in &run.glyph_run.glyphs {
+    let Some(resolved) = run.resolved_glyphs.get(&glyph.id) else {
+      continue;
+    };
+    let matrix =
+      run_transform * Affine::translation(glyph_offset.x + glyph.x, glyph_offset.y + glyph.y);
+    let placed = frame.place(matrix);
+
+    match resolved.as_ref() {
+      ResolvedGlyph::Outline(outline) => {
+        let color_layers = if color_override.is_some() {
+          Vec::new()
+        } else {
+          run.resolve_color_layers(outline, fill_color)
+        };
+        if color_layers.is_empty() {
+          // Synthesized (faux) bold: the raster backend strokes the glyph with
+          // its own fill color (`outline.embolden()`); mirror that here.
+          match outline.embolden().filter(|embolden| *embolden > 0.0) {
+            Some(embolden) => {
+              let data = path_data(outline.paths(), placed);
+              if data.is_empty() {
+                continue;
+              }
+              doc.flush_glyph_uses(&mut uses, fill, stroke)?;
+              let bold = GlyphStroke {
+                color: fill,
+                width: embolden,
+                join: bold_join,
+              };
+
+              doc.glyph_path(&data, fill, Some(bold))?;
+              if let Some(text_stroke) = stroke {
+                doc.glyph_path(&data, Rgba::TRANSPARENT, Some(text_stroke))?;
+              }
+            }
+            None => {
+              if let Some(id) = doc.outline_ref(outline, placed) {
+                uses.push((id, placed.x, placed.y));
+              }
+            }
+          }
+        } else {
+          doc.flush_glyph_uses(&mut uses, fill, stroke)?;
+          for (color, paths) in color_layers {
+            if color.0[3] == 0 {
+              continue;
+            }
+            let data = path_data(paths, placed);
+            if !data.is_empty() {
+              doc.glyph_path(&data, Rgba(color.0), None)?;
+            }
+          }
+        }
+      }
+      // Color/bitmap glyphs (emoji) have no vector form, so embed the rasterized
+      // pixmap as a `data:image/png` `<image>`, as a silhouette in the shadow pass.
+      ResolvedGlyph::Bitmap(bitmap) => {
+        let key = ImageKey::BitmapGlyph {
+          font: run.glyph_run.font_id(),
+          index: run.glyph_run.font_index,
+          glyph: glyph.id,
+          size: run.glyph_run.font_size.to_bits(),
+        };
+        let Some(href) = doc.image_href(&key, || {
+          bitmap
+            .image
+            .encode_png()
+            .map(|png| to_data_url("image/png", &png))
+        }) else {
+          continue;
+        };
+        doc.flush_glyph_uses(&mut uses, fill, stroke)?;
+        let (width, height) = (bitmap.image.width() as f32, bitmap.image.height() as f32);
+        let bitmap_matrix = placed * bitmap.image_transform();
+        let silhouette = color_override
+          .map(|color| doc.silhouette_filter(color))
+          .transpose()?;
+        let group = doc.begin_group(bitmap_matrix, 1.0, None, silhouette.as_deref())?;
+        doc.image_use(
+          &key,
+          &href,
+          (width, height),
+          Frame::new(0.0, 0.0, width, height),
+        )?;
+        doc.end_group(group)?;
+      }
+    }
+  }
+  doc.flush_glyph_uses(&mut uses, fill, stroke)
+}
+
+fn font_error(error: FontError) -> io::Error {
+  io::Error::new(
+    io::ErrorKind::InvalidData,
+    format!("glyph resolution failed: {error}"),
+  )
+}
+
+#[cfg(test)]
+mod tests {
+  use std::path::Path;
+
+  use takumi_core::{Fonts, layout::node::Node, resources::font::FontResource, viewport::Viewport};
+
+  use crate::render::{SvgOptions, render};
+
+  /// Registers the raw-TTF test font as a fallback for all scripts so the
+  /// default font-family resolves to it (no `woff2` feature required).
+  fn font_context_with_font() -> Fonts {
+    let mut fonts = Fonts::default();
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+      .join("../assets/fonts/archivo/Archivo-VariableFont_wdth,wght.ttf");
+    let data = std::fs::read(&path).expect("read test font");
+    fonts
+      .register(FontResource::new(data))
+      .expect("load test font");
+    fonts
+  }
+
+  #[test]
+  fn text_renders_glyph_paths_not_bitmap() {
+    let fonts = font_context_with_font();
+    let node = Node::text("Hi".to_string());
+    let svg = render(
+      SvgOptions::builder()
+        .node(node)
+        .viewport(Viewport::new((200, 80)))
+        .fonts(&fonts)
+        .build(),
+    )
+    .unwrap();
+    assert!(svg.contains("<path"), "expected glyph <path> elements");
+    assert!(
+      !svg.contains("base64"),
+      "text must be vector, not embedded bitmap"
+    );
+  }
+}

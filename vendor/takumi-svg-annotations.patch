@@ -1,0 +1,53 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 9500d0a..570d052 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -592,6 +592,15 @@ impl SvgDocument {
+     Ok(GroupToken::default())
+   }
+ 
++  /// PATCH(chrome-svg): opens a `<g data-takumi-node="…">` around one paint chunk of a node that
++  /// carries an id, so a caller can map every piece of SVG back to the node it came from. A node's
++  /// paint is split into several chunks (background, content, outline) that may land far apart in
++  /// paint order, so each chunk gets its own group instead of one group per node.
++  pub(crate) fn begin_annotation_group(&mut self, node_id: &str) -> io::Result<GroupToken> {
++    self.open("g", &[("data-takumi-node", node_id.into())])?;
++    Ok(GroupToken::default())
++  }
++
+   /// Opens an isolated group for [`SvgDocument::end_group`] to close.
+   pub(crate) fn begin_isolate_group(&mut self) -> io::Result<GroupToken> {
+     self.open("g", &[("style", "isolation:isolate".into())])?;
+diff --git a/src/scene_emit.rs b/src/scene_emit.rs
+index 238a04a..e41677b 100644
+--- a/src/scene_emit.rs
++++ b/src/scene_emit.rs
+@@ -132,6 +132,14 @@ impl ChunkWriter<'_, '_, '_> {
+     };
+     let doc = &mut *self.doc;
+     let result = (|| {
++      // PATCH(chrome-svg): tag the chunk with its node's id (see `begin_annotation_group`).
++      let annotation = placed
++        .node
++        .node
++        .as_ref()
++        .and_then(|node| node.id())
++        .map(|id| doc.begin_annotation_group(id))
++        .transpose()?;
+       let group = (!group_transform.is_identity())
+         .then(|| doc.begin_group(group_transform, 1.0, None, None))
+         .transpose()?;
+@@ -172,8 +180,11 @@ impl ChunkWriter<'_, '_, '_> {
+         ChunkPart::Outline => placed.emit_outline(doc)?,
+       }
+ 
+-      match group {
+-        Some(group) => doc.end_group(group),
++      if let Some(group) = group {
++        doc.end_group(group)?;
++      }
++      match annotation {
++        Some(annotation) => doc.end_group(annotation),
+         None => Ok(()),
+       }
+     })();

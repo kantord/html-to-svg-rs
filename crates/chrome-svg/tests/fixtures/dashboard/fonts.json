@@ -1,0 +1,373 @@
+{
+  "used": {
+    "15": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Bold",
+        "custom": false,
+        "glyphs": 4.0
+      }
+    ],
+    "17": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 14.0
+      },
+      {
+        "family": "Inter",
+        "postscript": "Inter-Bold",
+        "custom": false,
+        "glyphs": 14.0
+      }
+    ],
+    "19": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Bold",
+        "custom": false,
+        "glyphs": 14.0
+      }
+    ],
+    "22": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 7.0
+      }
+    ],
+    "25": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 7.0
+      }
+    ],
+    "29": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Bold",
+        "custom": false,
+        "glyphs": 4.0
+      }
+    ],
+    "34": [
+      {
+        "family": "Inter SemiBold",
+        "postscript": "Inter-SemiBold",
+        "custom": false,
+        "glyphs": 7.0
+      },
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 321.0
+      }
+    ],
+    "36": [
+      {
+        "family": "Inter SemiBold",
+        "postscript": "Inter-SemiBold",
+        "custom": false,
+        "glyphs": 7.0
+      }
+    ],
+    "39": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 191.0
+      },
+      {
+        "family": "DejaVu Sans Mono",
+        "postscript": "DejaVuSansMono",
+        "custom": false,
+        "glyphs": 11.0
+      }
+    ],
+    "41": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 5.0
+      }
+    ],
+    "44": [
+      {
+        "family": "DejaVu Sans Mono",
+        "postscript": "DejaVuSansMono",
+        "custom": false,
+        "glyphs": 11.0
+      }
+    ],
+    "48": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 135.0
+      },
+      {
+        "family": "Inter",
+        "postscript": "Inter-Bold",
+        "custom": false,
+        "glyphs": 6.0
+      }
+    ],
+    "56": [
+      {
+        "family": "Inter SemiBold",
+        "postscript": "Inter-SemiBold",
+        "custom": false,
+        "glyphs": 6.0
+      }
+    ],
+    "58": [
+      {
+        "family": "Inter SemiBold",
+        "postscript": "Inter-SemiBold",
+        "custom": false,
+        "glyphs": 6.0
+      }
+    ],
+    "60": [
+      {
+        "family": "Inter SemiBold",
+        "postscript": "Inter-SemiBold",
+        "custom": false,
+        "glyphs": 4.0
+      }
+    ],
+    "62": [
+      {
+        "family": "Inter SemiBold",
+        "postscript": "Inter-SemiBold",
+        "custom": false,
+        "glyphs": 6.0
+      }
+    ],
+    "68": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 7.0
+      }
+    ],
+    "71": [
+      {
+        "family": "Inter SemiBold",
+        "postscript": "Inter-SemiBold",
+        "custom": false,
+        "glyphs": 7.0
+      }
+    ],
+    "73": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 6.0
+      }
+    ],
+    "75": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 2.0
+      }
+    ],
+    "79": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 7.0
+      }
+    ],
+    "82": [
+      {
+        "family": "Inter SemiBold",
+        "postscript": "Inter-SemiBold",
+        "custom": false,
+        "glyphs": 8.0
+      }
+    ],
+    "84": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 6.0
+      }
+    ],
+    "86": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 2.0
+      }
+    ],
+    "90": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 8.0
+      }
+    ],
+    "93": [
+      {
+        "family": "Inter SemiBold",
+        "postscript": "Inter-SemiBold",
+        "custom": false,
+        "glyphs": 7.0
+      }
+    ],
+    "95": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 5.0
+      }
+    ],
+    "97": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 2.0
+      }
+    ],
+    "103": [
+      {
+        "family": "Inter SemiBold",
+        "postscript": "Inter-SemiBold",
+        "custom": false,
+        "glyphs": 5.0
+      }
+    ],
+    "105": [
+      {
+        "family": "Inter SemiBold",
+        "postscript": "Inter-SemiBold",
+        "custom": false,
+        "glyphs": 5.0
+      }
+    ],
+    "110": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 4.0
+      },
+      {
+        "family": "Inter",
+        "postscript": "Inter-Bold",
+        "custom": false,
+        "glyphs": 5.0
+      }
+    ],
+    "111": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Bold",
+        "custom": false,
+        "glyphs": 5.0
+      }
+    ],
+    "115": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 7.0
+      },
+      {
+        "family": "Inter",
+        "postscript": "Inter-Bold",
+        "custom": false,
+        "glyphs": 5.0
+      }
+    ],
+    "116": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Bold",
+        "custom": false,
+        "glyphs": 5.0
+      }
+    ],
+    "120": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 6.0
+      },
+      {
+        "family": "Inter",
+        "postscript": "Inter-Bold",
+        "custom": false,
+        "glyphs": 1.0
+      }
+    ],
+    "121": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Bold",
+        "custom": false,
+        "glyphs": 1.0
+      }
+    ],
+    "131": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 43.0
+      }
+    ],
+    "133": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 25.0
+      }
+    ],
+    "137": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Regular",
+        "custom": false,
+        "glyphs": 22.0
+      },
+      {
+        "family": "Inter",
+        "postscript": "Inter-Italic",
+        "custom": false,
+        "glyphs": 6.0
+      }
+    ],
+    "139": [
+      {
+        "family": "Inter",
+        "postscript": "Inter-Italic",
+        "custom": false,
+        "glyphs": 6.0
+      }
+    ]
+  },
+  "web": {}
+}

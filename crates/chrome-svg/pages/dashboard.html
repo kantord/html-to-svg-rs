@@ -1,0 +1,92 @@
+<!doctype html>
+<!-- Test page for chrome-svg: each block exercises one part of the pipeline (see README). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>chrome-svg test page</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Inter", sans-serif; background: #f3f4f8; color: #1d2433; font-size: 14px; }
+  header {
+    height: 64px; padding: 0 24px; display: flex; align-items: center; gap: 16px;
+    background: linear-gradient(90deg, #3b2bd9, #7b3fe4); color: white;
+  }
+  header h1 { font-size: 20px; font-weight: 700; margin: 0; }
+  header .tag { margin-left: auto; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.2); font-size: 12px; }
+  main { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; padding: 20px 24px; }
+  .card {
+    background: white; border-radius: 14px; padding: 18px 20px; border: 1px solid #e3e6ee;
+    box-shadow: 0 6px 18px rgba(30, 40, 90, .10);
+  }
+  .card h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px; }
+  p { line-height: 1.55; margin: 0 0 8px; }
+  mark { background: #ffe58a; padding: 1px 3px; border-radius: 3px; }
+  code { font-family: "DejaVu Sans Mono", monospace; font-size: 12px; background: #eef0f6; padding: 1px 4px; border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-weight: 600; color: #6a7387; border-bottom: 2px solid #e3e6ee; padding: 6px 8px; }
+  td { padding: 7px 8px; border-bottom: 1px solid #eef0f6; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .ok { background: #dcf5e6; color: #18794e; }
+  .warn { background: #fff1d6; color: #9a5b00; }
+  .stats { display: flex; gap: 12px; }
+  .stat { flex: 1; border-radius: 12px; padding: 12px; color: white; }
+  .stat b { display: block; font-size: 22px; }
+  .s1 { background: #2f80ed; } .s2 { background: #27ae60; } .s3 { background: #eb5757; opacity: .85; }
+  .clip { margin-top: 14px; height: 70px; border-radius: 16px; overflow: hidden; position: relative; background: #1d2433; }
+  .clip .bar { position: absolute; left: -20px; top: 18px; width: 140%; height: 34px; background: repeating-linear-gradient(45deg, #ffcc4d 0 14px, #1d2433 14px 28px); }
+  .badge { position: absolute; right: 26px; top: 86px; transform: rotate(-12deg); background: #ff4d6d; color: white; font-weight: 700; padding: 6px 12px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,.2); }
+  canvas { display: block; margin-top: 10px; border-radius: 10px; }
+  ul { margin: 0; padding-left: 18px; line-height: 1.6; }
+  li::marker { color: #7b3fe4; }
+  .note::before { content: "Note: "; font-weight: 700; color: #7b3fe4; }
+</style>
+</head>
+<body>
+<header data-testid="header">
+  <h1>Fleet overview</h1>
+  <span>Week 44</span>
+  <span class="tag" data-testid="env-tag">staging</span>
+</header>
+<div class="badge" data-testid="badge">Beta</div>
+<main>
+  <section class="card" data-testid="summary">
+    <h2>Summary</h2>
+    <p>Throughput rose by <mark data-testid="highlight">12.4%</mark> after the scheduler change, while the
+      median latency stayed flat. Two regions still report <code>ERR_TIMEOUT</code> during the nightly sync,
+      which is why the table below lists them separately.</p>
+    <p class="note">This paragraph is long enough to wrap over several lines, so each line becomes its own
+      text node in Takumi with Chrome's exact position.</p>
+    <table data-testid="regions">
+      <thead><tr><th>Region</th><th>Status</th><th class="num">Jobs</th><th class="num">p50 ms</th></tr></thead>
+      <tbody>
+        <tr data-testid="row-eu"><td>eu-west</td><td><span class="pill ok">healthy</span></td><td class="num">18,204</td><td class="num">41</td></tr>
+        <tr data-testid="row-us"><td>us-east</td><td><span class="pill warn">degraded</span></td><td class="num">22,951</td><td class="num">97</td></tr>
+        <tr data-testid="row-ap"><td>ap-south</td><td><span class="pill ok">healthy</span></td><td class="num">7,310</td><td class="num">58</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card" data-testid="side">
+    <h2>Today</h2>
+    <div class="stats">
+      <div class="stat s1" data-testid="stat-jobs"><b>48.4k</b>jobs</div>
+      <div class="stat s2" data-testid="stat-ok"><b>99.2%</b>success</div>
+      <div class="stat s3" data-testid="stat-alerts"><b>3</b>alerts</div>
+    </div>
+    <div class="clip" data-testid="clipped"><div class="bar"></div></div>
+    <canvas id="spark" width="300" height="60" data-testid="sparkline"></canvas>
+    <ul>
+      <li>Rotate the staging keys</li>
+      <li><em>Review</em> the us-east timeout</li>
+    </ul>
+  </section>
+</main>
+<script>
+  const c = document.getElementById('spark').getContext('2d');
+  c.fillStyle = '#eef0f6'; c.fillRect(0, 0, 300, 60);
+  c.strokeStyle = '#3b2bd9'; c.lineWidth = 2; c.beginPath();
+  [40, 32, 36, 20, 26, 14, 22, 10, 16, 8].forEach((y, i) => i ? c.lineTo(i * 32 + 6, y + 10) : c.moveTo(6, y + 10));
+  c.stroke();
+</script>
+</body>
+</html>

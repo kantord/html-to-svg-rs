@@ -1,0 +1,98 @@
+<!doctype html>
+<!-- chrome-svg stress page: one block per layout or paint feature the lowering has to get right.
+     Each block's data-testid names what it tests. Hand-written for this prototype. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>chrome-svg stress</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "DejaVu Sans", sans-serif; font-size: 13px; color: #222; background: #fafafa; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 14px; }
+  .t { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 10px; height: 170px; overflow: hidden; position: relative; }
+  .t > b:first-child { display: block; font-size: 11px; color: #888; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+  .borders span { display: inline-block; width: 46px; height: 34px; margin: 3px; border: 4px #4f46e5; }
+  .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+  .multiline mark { background: #fde68a; padding: 1px 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+  .z1 { position: absolute; left: 20px; top: 40px; width: 90px; height: 60px; background: #f87171; z-index: 2; }
+  .z2 { position: absolute; left: 60px; top: 70px; width: 90px; height: 60px; background: #60a5fa; z-index: 1; }
+  .z3 { position: relative; left: 100px; top: 10px; width: 90px; height: 60px; background: #34d399; }
+  .nested { width: 90px; height: 90px; margin: 20px 0 0 40px; background: #c7d2fe; transform: rotate(15deg); }
+  .nested div { width: 50px; height: 30px; margin: 20px; background: #4f46e5; transform: skewX(-20deg) scale(1.2); color: #fff; font-size: 11px; }
+  .scroller { height: 110px; overflow: auto; border: 1px solid #ddd; }
+  .scroller p { margin: 4px 6px; }
+  .sticky-head { position: sticky; top: 0; background: #eef2ff; padding: 2px 6px; font-weight: bold; }
+  .cols { columns: 2; column-gap: 12px; column-rule: 1px solid #ddd; font-size: 11px; line-height: 1.35; }
+  .clip { width: 120px; height: 100px; background: conic-gradient(from 45deg, #f43f5e, #f59e0b, #10b981, #3b82f6, #f43f5e); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+  .filters img, .filters div { width: 60px; height: 60px; display: inline-block; margin: 4px; }
+  .blend { width: 70px; height: 70px; border-radius: 50%; display: inline-block; mix-blend-mode: multiply; margin-right: -30px; }
+  .vertical { writing-mode: vertical-rl; height: 120px; font-size: 13px; }
+  .shadows div { display: inline-block; width: 60px; height: 40px; margin: 8px; border-radius: 8px; background: #fff; }
+  .counter { counter-reset: n; list-style: none; padding: 0; margin: 0; }
+  .counter li { counter-increment: n; }
+  .counter li::before { content: counter(n, upper-roman) ". "; color: #4f46e5; font-weight: bold; }
+  .bg-url { width: 100%; height: 60px; border-radius: 6px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Ccircle cx='10' cy='10' r='4' fill='%234f46e5'/%3E%3C/svg%3E") repeat, #eef2ff; }
+</style>
+</head>
+<body>
+<div class="grid">
+  <div class="t borders" data-testid="border-styles"><b>border styles</b>
+    <span style="border-style:solid"></span><span style="border-style:dashed"></span><span style="border-style:dotted"></span><span style="border-style:double"></span><span style="border-style:groove"></span><span style="border-style:ridge"></span><span style="border-style:inset"></span><span style="border-style:outset"></span>
+  </div>
+  <div class="t" data-testid="per-side"><b>per-side borders and radii</b>
+    <div style="width:120px;height:80px;border-style:solid;border-width:2px 8px 14px 4px;border-color:#ef4444 #22c55e #3b82f6 #eab308;border-radius:4px 30px 10px 50px / 20px 10px 40px 8px"></div>
+  </div>
+  <div class="t" data-testid="text-overflow"><b>text-overflow, decorations</b>
+    <div class="ellipsis">This line is far too long for its box and must end in an ellipsis…</div>
+    <p style="text-decoration: underline wavy #ef4444; margin: 6px 0">wavy underline</p>
+    <p style="text-decoration: line-through double; margin: 6px 0">double strike</p>
+    <p style="text-shadow: 1px 1px 0 #f472b6, 2px 2px 0 #60a5fa; font-size: 20px; font-weight: bold; margin: 6px 0">Shadow</p>
+  </div>
+  <div class="t multiline" data-testid="inline-wrap"><b>inline background across lines</b>
+    Plain text then <mark>a highlighted inline run that wraps across several lines of this narrow box</mark> and more text after it.
+  </div>
+  <div class="t" data-testid="z-order"><b>z-index interleaving</b>
+    <div class="z1"></div><div class="z2"></div><div class="z3"></div>
+  </div>
+  <div class="t" data-testid="nested-transforms"><b>nested transforms</b>
+    <div class="nested"><div>skew</div></div>
+  </div>
+  <div class="t" data-testid="scroll-offset"><b>scrolled container</b>
+    <div class="scroller" id="sc"><div class="sticky-head">Sticky header</div><p>Row 1</p><p>Row 2</p><p>Row 3</p><p>Row 4</p><p>Row 5</p><p>Row 6</p><p>Row 7</p><p>Row 8</p><p>Row 9</p></div>
+  </div>
+  <div class="t" data-testid="columns"><b>multi-column text</b>
+    <div class="cols">Multi-column layout splits one block of text across columns, so a single text node becomes fragments in two places, which the lowering must place line by line, exactly as Chrome broke them across the column boundary.</div>
+  </div>
+  <div class="t" data-testid="clip-path"><b>clip-path, conic gradient</b><div class="clip"></div></div>
+  <div class="t" data-testid="filters"><b>filters, blend modes</b>
+    <div class="filters"><div style="background:#3b82f6;filter:blur(3px)"></div><div style="background:#f59e0b;filter:grayscale(1) drop-shadow(3px 3px 2px #000)"></div></div>
+    <span class="blend" style="background:#f43f5e"></span><span class="blend" style="background:#3b82f6"></span><span class="blend" style="background:#facc15"></span>
+  </div>
+  <div class="t" data-testid="writing-modes"><b>vertical writing, RTL, CJK, emoji</b>
+    <div style="display:flex;gap:10px"><div class="vertical">縦書きのテキスト</div><div><p dir="rtl" style="margin:0 0 6px">مرحبا بالعالم</p><p style="margin:0 0 6px">中文，日本語，한국어</p><p style="margin:0">Emoji 🚀🎉👩‍💻</p></div></div>
+  </div>
+  <div class="t shadows" data-testid="shadows"><b>shadows</b>
+    <div style="box-shadow:0 4px 12px rgba(0,0,0,.25)"></div><div style="box-shadow:inset 0 2px 6px rgba(0,0,0,.4)"></div><div style="box-shadow:0 0 0 3px #6366f1, 0 0 0 6px #c7d2fe"></div><div style="box-shadow:10px 10px 0 -2px #f472b6"></div>
+  </div>
+  <div class="t" data-testid="counters"><b>counters, list markers</b>
+    <ol class="counter"><li>First</li><li>Second</li><li>Third</li></ol>
+    <ul style="margin:4px 0;padding-left:18px;list-style:square"><li>square</li></ul>
+    <ol style="margin:0;padding-left:22px;list-style:lower-greek"><li>greek</li><li>marker</li></ol>
+  </div>
+  <div class="t" data-testid="background-url"><b>background-image url()</b><div class="bg-url"></div>
+    <img alt="" width="48" height="48" style="margin-top:6px;border-radius:50%" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Crect width='10' height='10' fill='%23f59e0b'/%3E%3Ccircle cx='5' cy='5' r='3' fill='%23fff'/%3E%3C/svg%3E">
+  </div>
+  <div class="t" data-testid="table"><b>table, colspan, collapse</b>
+    <table style="border-collapse:collapse;font-size:12px;width:100%">
+      <tr><th style="border:1px solid #999" colspan="2">Merged head</th><th style="border:1px solid #999">C</th></tr>
+      <tr><td style="border:1px solid #999" rowspan="2">Tall</td><td style="border:1px solid #999">b1</td><td style="border:1px solid #999;background:#fef3c7">c1</td></tr>
+      <tr><td style="border:1px solid #999">b2</td><td style="border:1px solid #999">c2</td></tr>
+    </table>
+  </div>
+  <div class="t" data-testid="opacity-groups"><b>opacity groups</b>
+    <div style="opacity:.5;position:relative;height:100px"><div style="position:absolute;left:10px;top:10px;width:70px;height:70px;background:#ef4444"></div><div style="position:absolute;left:45px;top:30px;width:70px;height:70px;background:#3b82f6"></div></div>
+  </div>
+</div>
+<script>document.getElementById('sc').scrollTop = 40;</script>
+</body>
+</html>

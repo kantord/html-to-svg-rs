@@ -1,0 +1,109 @@
+<!doctype html>
+<!-- chrome-svg stress page: form controls, native and restyled the way component libraries
+     (shadcn/ui, Radix) do it. Hand-written for this prototype; not taken from any library. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>chrome-svg forms</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Inter", sans-serif; font-size: 14px; color: #09090b; background: #fff; }
+  .wrap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; padding: 24px; }
+  .panel { border: 1px solid #e4e4e7; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  h2 { margin: 0; font-size: 16px; font-weight: 600; }
+  .muted { color: #71717a; font-size: 13px; margin: -8px 0 0; }
+  label { font-size: 14px; font-weight: 500; display: block; margin-bottom: 6px; }
+  .input { width: 100%; height: 36px; padding: 0 12px; border: 1px solid #e4e4e7; border-radius: 6px; font: inherit; background: transparent; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+  .input:focus, .input.focus { outline: none; border-color: #a1a1aa; box-shadow: 0 0 0 3px rgba(161,161,170,.35); }
+  .input.invalid { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.2); }
+  .error { color: #ef4444; font-size: 12px; margin-top: 4px; }
+  textarea.input { height: 72px; padding: 8px 12px; resize: none; }
+  .btn { height: 36px; padding: 0 16px; border-radius: 6px; border: 1px solid transparent; font: inherit; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; }
+  .primary { background: #18181b; color: #fafafa; }
+  .outline { background: #fff; border-color: #e4e4e7; }
+  .ghost { background: transparent; }
+  .destructive { background: #ef4444; color: #fff; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  /* custom checkbox, switch and radio, drawn with boxes (the Radix way) */
+  .check { width: 16px; height: 16px; border: 1px solid #18181b; border-radius: 4px; display: inline-grid; place-items: center; }
+  .check.on { background: #18181b; }
+  .check.on::after { content: ""; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: translateY(-1px) rotate(45deg); }
+  .switch { width: 36px; height: 20px; border-radius: 999px; background: #e4e4e7; position: relative; display: inline-block; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+  .switch.on { background: #18181b; }
+  .switch.on::after { left: 18px; }
+  .radio { width: 16px; height: 16px; border: 1px solid #18181b; border-radius: 50%; display: inline-grid; place-items: center; }
+  .radio.on::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #18181b; }
+  .opt { display: flex; align-items: center; gap: 8px; }
+  .select { display: flex; justify-content: space-between; align-items: center; }
+  .select::after { content: "⌄"; color: #71717a; margin-top: -6px; }
+  .menu { border: 1px solid #e4e4e7; border-radius: 8px; padding: 4px; box-shadow: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -4px rgba(0,0,0,.1); }
+  .item { padding: 6px 8px; border-radius: 4px; display: flex; justify-content: space-between; }
+  .item.active { background: #f4f4f5; }
+  kbd { font-family: inherit; font-size: 11px; color: #71717a; letter-spacing: .1em; }
+  .slider { position: relative; height: 16px; }
+  .slider .track { position: absolute; top: 6px; left: 0; right: 0; height: 4px; border-radius: 4px; background: #e4e4e7; overflow: hidden; }
+  .slider .range { position: absolute; left: 0; width: 62%; height: 100%; background: #18181b; }
+  .slider .thumb { position: absolute; left: calc(62% - 8px); top: 0; width: 16px; height: 16px; border-radius: 50%; border: 1px solid #18181b; background: #fff; }
+  .tabs { display: inline-flex; background: #f4f4f5; border-radius: 8px; padding: 3px; }
+  .tab { padding: 4px 12px; border-radius: 6px; color: #71717a; font-weight: 500; }
+  .tab.active { background: #fff; color: #09090b; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .otp { display: flex; }
+  .otp span { width: 36px; height: 36px; border: 1px solid #e4e4e7; display: grid; place-items: center; font-size: 15px; margin-left: -1px; }
+  .otp span:first-child { border-radius: 6px 0 0 6px; } .otp span:last-child { border-radius: 0 6px 6px 0; }
+  .otp span.cur { position: relative; z-index: 1; border-color: #a1a1aa; box-shadow: 0 0 0 3px rgba(161,161,170,.35); }
+  .badge { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 6px; border: 1px solid #e4e4e7; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #f472b6, #6366f1); color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 12px; outline: 2px solid #fff; }
+  .avatars .avatar + .avatar { margin-left: -10px; }
+  .progress { height: 8px; border-radius: 99px; background: #f4f4f5; overflow: hidden; }
+  .progress div { height: 100%; width: 33%; background: #18181b; }
+  .toast { border: 1px solid #e4e4e7; border-radius: 8px; padding: 12px 16px; box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+  fieldset { border: 1px solid #e4e4e7; border-radius: 8px; padding: 10px 14px; margin: 0; }
+  legend { padding: 0 4px; font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="panel" data-testid="native">
+    <h2>Native controls</h2>
+    <p class="muted">Rendered by the browser: raster fallback.</p>
+    <input type="text" value="Ada Lovelace" data-testid="native-text">
+    <select data-testid="native-select"><option>Option one</option></select>
+    <div class="row"><input type="checkbox" checked> <input type="radio" checked> <input type="range" value="70"> <input type="color" value="#6366f1"></div>
+    <div class="row"><button>Native button</button> <progress value="40" max="100"></progress> <meter value="0.7"></meter></div>
+    <textarea rows="2">Two lines
+of text</textarea>
+    <fieldset><legend>Fieldset legend</legend><div class="opt"><input type="checkbox"> Remember me</div></fieldset>
+  </section>
+
+  <section class="panel" data-testid="account">
+    <h2>Account</h2>
+    <p class="muted">Restyled controls, drawn with boxes.</p>
+    <div><label for="n">Name</label><div class="input focus" style="display:flex;align-items:center">Pedro Duarte</div></div>
+    <div><label>Email</label><div class="input invalid" style="display:flex;align-items:center;color:#71717a">not-an-email</div><div class="error">Enter a valid email address.</div></div>
+    <div><label>Framework</label><div class="input select" data-testid="select">Next.js</div></div>
+    <div class="menu" data-testid="menu">
+      <div class="item">Profile <kbd>⇧⌘P</kbd></div>
+      <div class="item active">Billing <kbd>⌘B</kbd></div>
+      <div class="item">Settings <kbd>⌘S</kbd></div>
+    </div>
+    <div class="row"><span class="btn primary" data-testid="save">Save changes</span><span class="btn outline">Cancel</span><span class="btn ghost">Ghost</span><span class="btn destructive">Delete</span></div>
+  </section>
+
+  <section class="panel" data-testid="prefs">
+    <h2>Preferences</h2>
+    <div class="tabs"><span class="tab active">Account</span><span class="tab">Password</span><span class="tab">Team</span></div>
+    <div class="opt"><span class="check on" data-testid="checkbox"></span> Accept terms and conditions</div>
+    <div class="opt"><span class="switch on" data-testid="switch"></span> Airplane mode <span class="switch" style="margin-left:auto"></span></div>
+    <div class="row" data-testid="radios"><span class="opt"><span class="radio on"></span> Default</span><span class="opt"><span class="radio"></span> Comfortable</span><span class="opt"><span class="radio"></span> Compact</span></div>
+    <div class="slider" data-testid="slider"><div class="track"><div class="range"></div></div><div class="thumb"></div></div>
+    <div class="otp" data-testid="otp"><span>1</span><span>4</span><span class="cur">2</span><span></span><span></span><span></span></div>
+    <div class="row"><span class="badge">Badge</span><span class="badge" style="background:#18181b;color:#fff;border-color:#18181b">Secondary</span>
+      <span class="avatars row" style="gap:0;margin-left:auto"><span class="avatar">CN</span><span class="avatar">LR</span><span class="avatar">ER</span></span></div>
+    <div class="progress" data-testid="progress"><div></div></div>
+    <textarea class="input" placeholder="Type your message here."></textarea>
+    <div class="toast" data-testid="toast"><b>Scheduled: Catch up</b><div class="muted" style="margin:2px 0 0">Friday, February 10, 2023 at 5:57 PM</div></div>
+  </section>
+</div>
+</body>
+</html>

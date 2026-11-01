@@ -1,0 +1,279 @@
+//! CSS gradient / background-image → SVG paint emission.
+
+use std::{f32::consts::TAU, io, sync::Arc};
+
+use takumi_core::{
+  context::RenderContext,
+  geometry::Size,
+  layout::background_image_geometry::{BackgroundLayer, ImageTiling},
+  paint::{ConicGradientTile, SrgbStop},
+  path_data::{APPROX_CHARS_PER_NUMBER, PathData},
+  style::{
+    BackgroundImage, BlendMode, ConicGradient, FillRule, LinearGradient, RadialGradient, ToCss,
+  },
+};
+
+use crate::{
+  Frame, GradientStop, Rgba, SvgDocument,
+  image::{Drawing, PRESERVE_ASPECT_NONE},
+};
+
+const CONIC_WEDGES: usize = 180;
+
+/// Emits background/mask image layers for one node into an SVG document.
+pub(crate) struct LayerEmitter<'a, 'd> {
+  context: &'a RenderContext,
+  doc: &'d mut SvgDocument,
+}
+
+impl<'a, 'd> LayerEmitter<'a, 'd> {
+  pub(crate) fn new(context: &'a RenderContext, doc: &'d mut SvgDocument) -> Self {
+    Self { context, doc }
+  }
+
+  /// Emits resolved background or mask layers, bottom first, over a box whose border box is
+  /// `border_box`.
+  pub(crate) fn layers(
+    &mut self,
+    layers: &[BackgroundLayer<'_>],
+    border_box: Frame,
+  ) -> io::Result<()> {
+    for layer in layers {
+      let blend = (layer.blend_mode != BlendMode::Normal)
+        .then(|| {
+          self
+            .doc
+            .begin_blend_group(&layer.blend_mode.to_css_string())
+        })
+        .transpose()?;
+
+      self.layer(layer.image, &layer.tiling, border_box)?;
+      if let Some(blend) = blend {
+        self.doc.end_group(blend)?;
+      }
+    }
+    Ok(())
+  }
+
+  fn layer(
+    &mut self,
+    image: &BackgroundImage,
+    tiling: &ImageTiling,
+    border_box: Frame,
+  ) -> io::Result<()> {
+    let tile = tiling.tile;
+    let dest = Frame::new(
+      border_box.x + tiling.dest.left,
+      border_box.y + tiling.dest.top,
+      tiling.dest.right - tiling.dest.left,
+      tiling.dest.bottom - tiling.dest.top,
+    );
+    let (xs, ys) = tiling.origins();
+
+    // One tile in view draws on its own; a pattern only pays off for several.
+    if let ([tile_x], [tile_y]) = (xs.as_slice(), ys.as_slice()) {
+      let rect = Frame::new(
+        border_box.x + tile_x,
+        border_box.y + tile_y,
+        tile.width,
+        tile.height,
+      );
+      let overflows = rect.x < dest.x
+        || rect.y < dest.y
+        || rect.x + rect.w > dest.x + dest.w
+        || rect.y + rect.h > dest.y + dest.h;
+
+      if overflows {
+        let token = self.doc.begin_clipped_group(&dest.path_data())?;
+        self.tile(image, rect, tiling.image_size)?;
+        return self.doc.end_group(token);
+      }
+      return self.tile(image, rect, tiling.image_size);
+    }
+
+    let step = tiling.step();
+    let (token, pattern) = self.doc.begin_pattern(Frame::new(
+      border_box.x + tiling.phase.x,
+      border_box.y + tiling.phase.y,
+      step.width,
+      step.height,
+    ))?;
+    self.tile(
+      image,
+      Frame::new(0.0, 0.0, tile.width, tile.height),
+      tiling.image_size,
+    )?;
+    self.doc.end_pattern(token)?;
+    self.doc.rect_paint(dest, &pattern)
+  }
+
+  /// Paints one tile of a layer into `rect`, an image rendered at `image_size` stretched over it.
+  fn tile(
+    &mut self,
+    image: &BackgroundImage,
+    rect: Frame,
+    image_size: Size<f32>,
+  ) -> io::Result<()> {
+    match image {
+      BackgroundImage::Linear(gradient) => self.linear(gradient, rect),
+      BackgroundImage::Radial(gradient) => self.radial(gradient, rect),
+      BackgroundImage::Conic(gradient) => self.conic(gradient, rect),
+      BackgroundImage::Url(url) => self.url(url, rect, image_size),
+      BackgroundImage::None => Ok(()),
+    }
+  }
+
+  fn url(&mut self, url: &Arc<str>, rect: Frame, image_size: Size<f32>) -> io::Result<()> {
+    let Some(drawing) = Drawing::of_url(url, rect, image_size, self.context, self.doc) else {
+      return Ok(());
+    };
+
+    self.doc.draw(&drawing, rect, PRESERVE_ASPECT_NONE)
+  }
+
+  fn linear(&mut self, gradient: &LinearGradient, rect: Frame) -> io::Result<()> {
+    let Frame { x, y, w, h } = rect;
+    let geometry =
+      gradient.resolve_geometry(w, h, &self.context.sizing, self.context.current_color);
+    let resolved = geometry.stops();
+    if resolved.is_empty() {
+      return Ok(());
+    }
+
+    let max_extent = geometry.axis_length / 2.0;
+    let (cx, cy) = (x + w / 2.0, y + h / 2.0);
+    let point_at = |t: f32| {
+      (
+        cx + (t - max_extent) * geometry.dir_x,
+        cy + (t - max_extent) * geometry.dir_y,
+      )
+    };
+
+    let (t0, t1, stops) = if gradient.repeating {
+      let first = resolved.first().map_or(0.0, |s| s.position);
+      let last = resolved.last().map_or(geometry.axis_length, |s| s.position);
+      (
+        first,
+        last,
+        svg_stops(SrgbStop::spanned(resolved, first, last - first)),
+      )
+    } else {
+      (
+        0.0,
+        geometry.axis_length,
+        svg_stops(SrgbStop::sampled(
+          resolved,
+          geometry.axis_length,
+          gradient.interpolation,
+        )),
+      )
+    };
+    let paint = self
+      .doc
+      .linear_gradient(point_at(t0), point_at(t1), gradient.repeating, &stops)?;
+    self.doc.rect_paint(rect, &paint)
+  }
+
+  fn radial(&mut self, gradient: &RadialGradient, rect: Frame) -> io::Result<()> {
+    let Frame { x, y, w, h } = rect;
+    let geometry =
+      gradient.resolve_geometry(w, h, &self.context.sizing, self.context.current_color);
+    let resolved = geometry.stops();
+    if resolved.is_empty() {
+      return Ok(());
+    }
+
+    let radius_x = geometry.inv_radius_x.recip();
+    let radius_y = geometry.inv_radius_y.recip();
+    let (r, stops) = if gradient.repeating {
+      let first = resolved.first().map_or(0.0, |s| s.position);
+      let last = resolved
+        .last()
+        .map_or(geometry.radius_scale, |s| s.position);
+      (
+        (last - first).max(1e-6),
+        svg_stops(SrgbStop::spanned(resolved, first, last - first)),
+      )
+    } else {
+      (
+        geometry.radius_scale,
+        svg_stops(SrgbStop::sampled(
+          resolved,
+          geometry.radius_scale,
+          gradient.interpolation,
+        )),
+      )
+    };
+    let scale = (
+      (radius_x / geometry.radius_scale.max(1e-6)).max(1e-6),
+      (radius_y / geometry.radius_scale.max(1e-6)).max(1e-6),
+    );
+    let paint = self.doc.radial_gradient(
+      (x + geometry.cx, y + geometry.cy),
+      r,
+      scale,
+      gradient.repeating,
+      &stops,
+    )?;
+    self.doc.rect_paint(rect, &paint)
+  }
+
+  fn conic(&mut self, gradient: &ConicGradient, rect: Frame) -> io::Result<()> {
+    let Frame { x, y, w, h } = rect;
+    let tile = ConicGradientTile::new(
+      gradient,
+      w as u32,
+      h as u32,
+      &self.context.sizing,
+      self.context.current_color,
+      false,
+    );
+    let lut_len = tile.lut.len();
+    if lut_len == 0 {
+      return Ok(());
+    }
+
+    let (cx, cy) = gradient.resolve_center(w, h, &self.context.sizing);
+    let (ccx, ccy) = (x + cx, y + cy);
+    let radius = [(x, y), (x + w, y), (x, y + h), (x + w, y + h)]
+      .into_iter()
+      .map(|(px, py)| (px - ccx).hypot(py - ccy))
+      .fold(0.0_f32, f32::max);
+
+    let group = self.doc.begin_clipped_group(&rect.path_data())?;
+    for i in 0..CONIC_WEDGES {
+      let a0 = i as f32 / CONIC_WEDGES as f32 * TAU;
+      let a1 = (i + 1) as f32 / CONIC_WEDGES as f32 * TAU;
+      let mid = (a0 + a1) / 2.0;
+      let adjusted = (mid - tile.start_rad).rem_euclid(TAU);
+      let idx = tile.lut_index_for_adjusted_angle_with_len(adjusted, lut_len);
+      let fill = Rgba::demultiplied(tile.lut.sample(idx));
+      if fill.0[3] == 0 {
+        continue;
+      }
+      let (x0, y0) = (ccx + radius * a0.sin(), ccy - radius * a0.cos());
+      let (x1, y1) = (ccx + radius * a1.sin(), ccy - radius * a1.cos());
+      let mut wedge = PathData::with_capacity(6 * APPROX_CHARS_PER_NUMBER);
+      wedge.command(b'M');
+      wedge.pair(ccx, ccy);
+      wedge.command(b'L');
+      wedge.pair(x0, y0);
+      wedge.pair(x1, y1);
+      wedge.close();
+      self
+        .doc
+        .fill_path(&wedge.into_string(), fill, FillRule::NonZero)?;
+    }
+    self.doc.end_group(group)
+  }
+}
+
+fn svg_stops(stops: Vec<SrgbStop>) -> Vec<GradientStop> {
+  stops
+    .into_iter()
+    .map(|stop| GradientStop {
+      offset: stop.offset,
+      color: Rgba(stop.color.0),
+    })
+    .collect()
+}
