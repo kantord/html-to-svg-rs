@@ -47,6 +47,7 @@ pub fn family_list(uses: &[FontUse]) -> String {
         .join(", ")
 }
 
+#[derive(Debug, Serialize)]
 pub struct Registered {
     pub faces: usize,
     pub missing: Vec<String>,

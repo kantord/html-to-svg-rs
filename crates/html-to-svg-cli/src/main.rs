@@ -4,7 +4,7 @@
 //! ```text
 //! html-to-svg capture <url> <dir> [--size WxH] [--settle SECONDS]
 //!                         Chrome -> dir/snapshot.json, chrome.png, fonts.json, fonts/
-//! html-to-svg convert <dir> [--font F]... [--no-fit]
+//! html-to-svg convert <dir> [--font F]... [--no-fit] [--json]
 //!                         snapshot -> dir/out.svg + dir/takumi.png (fonts.json's faces are
 //!                         registered by themselves; --font adds more)
 //! html-to-svg diff <dir>   out.svg (via resvg) and takumi.png vs chrome.png
@@ -27,6 +27,8 @@ struct Args {
     size: (u32, u32),
     settle: f64,
     fit_text: bool,
+    /// `convert` prints its report as one JSON object instead of text.
+    json: bool,
 }
 
 fn parse_args() -> Result<Args> {
@@ -36,6 +38,7 @@ fn parse_args() -> Result<Args> {
         size: (1024, 768),
         settle: 2.0,
         fit_text: true,
+        json: false,
     };
     let mut it = std::env::args().skip(1);
     while let Some(a) = it.next() {
@@ -50,6 +53,7 @@ fn parse_args() -> Result<Args> {
             }
             "--settle" => args.settle = it.next().context("--settle needs seconds")?.parse()?,
             "--no-fit" => args.fit_text = false,
+            "--json" => args.json = true,
             _ => args.positional.push(a),
         }
     }
@@ -110,6 +114,13 @@ fn convert(dir: &Path, args: &Args) -> Result<()> {
             fallback_size: args.size,
         },
     )?;
+    std::fs::write(dir.join("out.svg"), &conversion.svg)?;
+    std::fs::write(dir.join("takumi.png"), &conversion.png)?;
+    if args.json {
+        let report = serde_json::json!({ "fonts": conversion.fonts, "report": conversion.report });
+        println!("{report}");
+        return Ok(());
+    }
     let registered = &conversion.fonts;
     println!(
         "fonts: {} face(s) Chrome used registered{}",
@@ -123,8 +134,6 @@ fn convert(dir: &Path, args: &Args) -> Result<()> {
     if args.fonts.is_empty() && registered.faces == 0 {
         eprintln!("warning: no fonts (no fonts.json, no --font); Takumi draws no text");
     }
-    std::fs::write(dir.join("out.svg"), &conversion.svg)?;
-    std::fs::write(dir.join("takumi.png"), &conversion.png)?;
     print_report(&conversion.report);
     println!("wrote {0}/out.svg, {0}/takumi.png", dir.display());
     Ok(())

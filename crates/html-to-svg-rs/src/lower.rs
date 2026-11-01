@@ -9,6 +9,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use resvg::tiny_skia::{IntRect, Pixmap};
+use serde::Serialize;
 use takumi::prelude::*;
 
 use crate::fonts::{FontUse, family_list};
@@ -94,7 +95,7 @@ pub struct Options<'a> {
     pub images: &'a BTreeMap<String, String>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize)]
 pub struct Report {
     pub boxes: usize,
     pub text_lines: usize,

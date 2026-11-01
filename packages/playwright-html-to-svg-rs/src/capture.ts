@@ -9,9 +9,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { Page, Response } from "@playwright/test";
+import type { BrowserContext, Page, Response } from "@playwright/test";
 
-/** Font and image responses seen since recording started, kept to save their bodies later. */
+/**
+ * Font and image responses of every page of a browser context, from when recording started:
+ * the capture saves their bodies. Recording must start before the page navigates.
+ */
 export class ResourceRecorder {
   readonly responses: Response[] = [];
   private readonly listener = (response: Response) => {
@@ -19,12 +22,12 @@ export class ResourceRecorder {
     if (type === "font" || type === "image") this.responses.push(response);
   };
 
-  constructor(private readonly page: Page) {
-    page.on("response", this.listener);
+  constructor(private readonly context: BrowserContext) {
+    context.on("response", this.listener);
   }
 
   stop(): void {
-    this.page.off("response", this.listener);
+    this.context.off("response", this.listener);
   }
 }
 

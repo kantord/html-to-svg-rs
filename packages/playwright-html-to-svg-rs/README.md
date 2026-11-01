@@ -14,7 +14,9 @@ test("dashboard", async ({ page, svgSnapshot }) => {
 ```
 
 `svgSnapshot(name, page?)` captures the current viewport, converts it, attaches `<name>.svg` to
-the test report and returns `{ svg, dir }` (`dir` is the capture under the test's output
+the test report and returns `{ svg, report, dir }`. `report` is what the conversion found:
+faces not found, warnings (e.g. an image that was not captured), elements cropped from Chrome's
+screenshot (`<img>`, `<canvas>`, form controls). (`dir` is the capture under the test's output
 directory: `snapshot.json`, `chrome.png`, `out.svg`, the fonts and images Chrome used).
 
 ## Setup
@@ -25,11 +27,15 @@ directory: `snapshot.json`, `chrome.png`, `out.svg`, the fonts and images Chrome
   does not ship the binary yet.
 - **Fonts:** system fonts are found with `fc-list` on the machine that runs the conversion, which
   is the one running the test. Web fonts and images are saved from the test's own responses, which
-  are recorded from the moment the test asks for `svgSnapshot`.
+  are recorded for the whole browser context from its creation, so navigating in a `beforeEach`
+  is fine. A context the test creates itself is recorded from its first `svgSnapshot` on.
 - The viewport is captured at scroll position 0; any device scale factor works.
 
 ## Tests
 
-`pnpm test` builds the debug binary and runs `tests/` on Chromium, Chromium at 2x and Chrome: the
-SVG keeps the page's `data-*` attributes, and the SVG drawn back by Chrome differs from Chrome's
-picture of the page in under 2% of pixels.
+`pnpm test` builds the debug binary and runs `tests/` on Chromium, Chromium at 2x and Chrome
+(`just test` at the repository root runs them in the test container). They test the glue, not the
+converter's accuracy (that is the Rust tests' job): `data-*` attributes reach the SVG; the web
+font and images the page downloaded are saved and used; `<img>` and `<canvas>` are cropped from
+the screenshot; and, as a coarse check, the SVG drawn back by Chrome differs from Chrome's picture
+of the page in under 2% of pixels.

@@ -12,16 +12,16 @@ const binary =
 export default defineConfig<HtmlToSvgOptions>({
   testDir: "tests",
   reporter: process.env.CI ? "github" : "list",
-  use: { htmlToSvgBinary: binary, viewport: { width: 800, height: 600 } },
+  use: { htmlToSvgBinary: binary, viewport: { width: 800, height: 800 } },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 800, height: 600 } } },
+    { name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 800, height: 800 } } },
     {
       name: "chromium-2x",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 800, height: 600 }, deviceScaleFactor: 2 },
+      use: { ...devices["Desktop Chrome"], viewport: { width: 800, height: 800 }, deviceScaleFactor: 2 },
     },
     {
       name: "chrome",
-      use: { ...devices["Desktop Chrome"], channel: "chrome", viewport: { width: 800, height: 600 } },
+      use: { ...devices["Desktop Chrome"], channel: "chrome", viewport: { width: 800, height: 800 } },
     },
   ],
 });
