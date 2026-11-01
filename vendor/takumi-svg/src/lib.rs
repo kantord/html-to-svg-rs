@@ -592,7 +592,7 @@ impl SvgDocument {
     Ok(GroupToken::default())
   }
 
-  /// PATCH(chrome-svg): opens a `<g data-takumi-node="…">` around one paint chunk of a node that
+  /// PATCH(html-to-svg): opens a `<g data-takumi-node="…">` around one paint chunk of a node that
   /// carries an id, so a caller can map every piece of SVG back to the node it came from. A node's
   /// paint is split into several chunks (background, content, outline) that may land far apart in
   /// paint order, so each chunk gets its own group instead of one group per node.

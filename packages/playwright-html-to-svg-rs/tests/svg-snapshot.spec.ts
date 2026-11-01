@@ -86,6 +86,35 @@ test("the SVG, drawn by Chrome, looks like the page", async ({ page, svgSnapshot
   expect(share, `${(share * 100).toFixed(2)}% of pixels differ`).toBeLessThan(0.02);
 });
 
+test("the snapshot leaves the page scrolled where it was", async ({ page, svgSnapshot }) => {
+  await page.evaluate(() => {
+    document.body.style.height = "3000px";
+    window.scrollTo(0, 300);
+  });
+  await svgSnapshot("scrolled");
+  expect(await page.evaluate(() => window.scrollY)).toBe(300);
+});
+
+test("an image reached through a redirect is captured", async ({ page, svgSnapshot, baseURL }) => {
+  // The page asks for /moved/stripes.png; the server answers with a redirect to /stripes.png.
+  await page.route("**/moved/stripes.png", (route) =>
+    route.fulfill({ status: 302, headers: { location: "/stripes.png" } }),
+  );
+  const loaded = page.waitForResponse((r) => r.url().endsWith("/stripes.png") && r.status() === 200);
+  await page.evaluate(() => {
+    const div = document.createElement("div");
+    div.style.cssText = "width: 120px; height: 60px; background: url('/moved/stripes.png')";
+    div.dataset.testid = "moved";
+    document.body.prepend(div);
+  });
+  await loaded;
+  const { report, dir } = await svgSnapshot("redirect");
+
+  const images = JSON.parse(await readFile(join(dir, "images.json"), "utf8"));
+  expect(Object.keys(images.images)).toContain(`${baseURL}/moved/stripes.png`);
+  expect(report.report.warnings).toEqual([]);
+});
+
 test.describe("with htmlToSvgAssetsDir", () => {
   test.use({
     htmlToSvgAssetsDir: async ({}, use, testInfo) => use(testInfo.outputPath("assets")),

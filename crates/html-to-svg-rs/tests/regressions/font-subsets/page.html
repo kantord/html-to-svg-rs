@@ -1,0 +1,16 @@
+<!doctype html>
+<!-- Bug font-subsets: a web font split into unicode-range subsets (latin, latin-ext) is one face
+     to Chrome; only one subset file was registered, so letters of the other fell back to another
+     font. Pacifico is OFL (FONT-LICENSE). -->
+<meta charset="utf-8">
+<title>font-subsets</title>
+<style>
+  @font-face { font-family: "Pacifico"; unicode-range: U+0000-00FF;
+    src: url("/packages/test-fixtures/node_modules/@fontsource/pacifico/files/pacifico-latin-400-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Pacifico"; unicode-range: U+0100-024F;
+    src: url("/packages/test-fixtures/node_modules/@fontsource/pacifico/files/pacifico-latin-ext-400-normal.woff2") format("woff2"); }
+  body { margin: 20px; }
+  p { margin: 0; font: 56px/1.3 "Pacifico"; color: #1e293b; }
+</style>
+<p>ąęłśćńźż</p>
+<p>Hello world</p>

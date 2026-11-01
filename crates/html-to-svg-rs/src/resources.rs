@@ -69,15 +69,14 @@ pub fn inline_urls(value: &str, data: &BTreeMap<String, String>) -> Option<Strin
     while let Some(at) = rest.find("url(") {
         out.push_str(&rest[..at]);
         let after = &rest[at + 4..];
-        let end = after.find(')')?;
-        let url = after[..end].trim().trim_matches(['"', '\'']);
+        let (url, used) = read_url(after)?;
         let resolved = if url.starts_with("data:") {
-            url.to_owned()
+            url
         } else {
-            data.get(url)?.clone()
+            data.get(&url)?.clone()
         };
-        out.push_str(&format!("url(\"{resolved}\")"));
-        rest = &after[end + 1..];
+        out.push_str(&quoted_url(&resolved));
+        rest = &after[used..];
     }
     out.push_str(rest);
     Some(out)
@@ -95,33 +94,27 @@ fn resolve_image_sets(value: &str, data: &BTreeMap<String, String>) -> String {
             .min();
         let Some((at, len)) = found else { break };
         let body = at + len;
-        // The parenthesis that closes the image-set.
-        let mut depth = 1;
-        let Some(end) = rest[body..].char_indices().find_map(|(i, ch)| {
-            depth += match ch {
-                '(' => 1,
-                ')' => -1,
-                _ => 0,
-            };
-            (depth == 0).then_some(body + i)
-        }) else {
+        // The parenthesis that closes the image-set, not counting those in quoted strings.
+        let Some(end) = closing_paren(&rest[body..]).map(|e| body + e) else {
             break;
         };
         let inner = &rest[body..end];
-        let candidates: Vec<&str> = inner
-            .match_indices("url(")
-            .filter_map(|(i, _)| {
-                let tail = &inner[i + 4..];
-                Some(tail[..tail.find(')')?].trim().trim_matches(['"', '\'']))
-            })
-            .collect();
+        let mut candidates: Vec<String> = Vec::new();
+        let mut scan = inner;
+        while let Some(i) = scan.find("url(") {
+            let Some((url, used)) = read_url(&scan[i + 4..]) else {
+                break;
+            };
+            candidates.push(url);
+            scan = &scan[i + 4 + used..];
+        }
         let pick = candidates
             .iter()
-            .find(|u| u.starts_with("data:") || data.contains_key(**u))
+            .find(|u| u.starts_with("data:") || data.contains_key(*u))
             .or(candidates.first());
         out.push_str(&rest[..at]);
         if let Some(url) = pick {
-            out.push_str(&format!("url(\"{url}\")"));
+            out.push_str(&quoted_url(url));
         }
         rest = &rest[end + 1..];
     }
@@ -129,9 +122,89 @@ fn resolve_image_sets(value: &str, data: &BTreeMap<String, String>) -> String {
     out
 }
 
+/// The URL of a `url(` token, from just after `url(`: Chrome writes it quoted, and a quoted URL
+/// may hold parentheses (`data:...rgb(1,2,3)...`) and escaped quotes. Returns the URL and how many
+/// bytes, up to and including the closing `)`, it took.
+fn read_url(after: &str) -> Option<(String, usize)> {
+    let start = after.len() - after.trim_start().len();
+    let mut chars = after[start..].char_indices();
+    let (_, first) = chars.next()?;
+    if first != '"' && first != '\'' {
+        let end = after.find(')')?;
+        return Some((after[..end].trim().to_owned(), end + 1));
+    }
+    let mut url = String::new();
+    while let Some((i, c)) = chars.next() {
+        match c {
+            '\\' => url.push(chars.next()?.1),
+            c if c == first => {
+                let tail = &after[start + i + 1..];
+                let close = tail.find(')')?;
+                tail[..close].trim().is_empty().then_some(())?;
+                return Some((url, start + i + 1 + close + 1));
+            }
+            c => url.push(c),
+        }
+    }
+    None
+}
+
+/// `url("...")`, quoting what has to be.
+fn quoted_url(url: &str) -> String {
+    format!(
+        "url(\"{}\")",
+        url.replace('\\', "\\\\").replace('"', "\\\"")
+    )
+}
+
+/// Where the `)` closing an already open parenthesis is, skipping quoted strings.
+fn closing_paren(s: &str) -> Option<usize> {
+    let mut depth = 1;
+    let mut quote = None;
+    let mut chars = s.char_indices();
+    while let Some((i, c)) = chars.next() {
+        match (quote, c) {
+            (Some(_), '\\') => {
+                chars.next();
+            }
+            (Some(q), c) if c == q => quote = None,
+            (Some(_), _) => {}
+            (None, '"' | '\'') => quote = Some(c),
+            (None, '(') => depth += 1,
+            (None, ')') => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_quoted_url_ends_at_its_quote_not_at_a_parenthesis() {
+        let svg = r#"url("data:image/svg+xml,%3Crect fill='rgb(220,38,38)'/%3E") 0 0"#;
+        assert_eq!(inline_urls(svg, &BTreeMap::new()).as_deref(), Some(svg));
+        let escaped = r#"url("data:text/plain,a\"b(c)")"#;
+        assert_eq!(
+            inline_urls(escaped, &BTreeMap::new()).as_deref(),
+            Some(r#"url("data:text/plain,a\"b(c)")"#)
+        );
+        assert_eq!(
+            inline_urls(
+                r#"image-set(url("data:x,(1)") 1x, url("b.png") 2x)"#,
+                &BTreeMap::new()
+            )
+            .as_deref(),
+            Some(r#"url("data:x,(1)")"#)
+        );
+    }
 
     #[test]
     fn inlines_known_urls_and_keeps_data_urls() {

@@ -1,0 +1,13 @@
+<!doctype html>
+<!-- Bug annotation-attribute-names: the converter adds `data-node` to every annotated element,
+     next to the page's own `data-*`; a page with its own `data-node` got two (invalid XML), and
+     an attribute name XML does not allow was copied as it was. -->
+<meta charset="utf-8">
+<title>duplicate-data-node</title>
+<style>
+  body { margin: 20px; }
+  div { width: 160px; height: 80px; background: #2563eb; margin-bottom: 10px; }
+</style>
+<div data-node="from-the-page" data-testid="card"></div>
+<div id="odd" data-testid="odd"></div>
+<script>document.getElementById("odd").setAttribute("data-a·b;", "x");</script>

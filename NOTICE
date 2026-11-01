@@ -1,0 +1,11 @@
+html-to-svg-rs
+Copyright 2026 Daniel Kantor
+
+Licensed under the Apache License, Version 2.0 (LICENSE).
+
+This repository includes a modified copy of takumi-svg 0.3.34
+(https://github.com/kane50613/takumi), Copyright (c) 2025 Kane Wang, licensed MIT OR Apache-2.0:
+see vendor/README.md and the licence files in vendor/takumi-svg/.
+
+The test fixture crates/html-to-svg-rs/tests/regressions/background-clip-text/ includes the
+Pacifico font (SIL Open Font License 1.1, FONT-LICENSE next to it).

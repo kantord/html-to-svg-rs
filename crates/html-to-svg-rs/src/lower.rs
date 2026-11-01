@@ -388,6 +388,15 @@ impl Lowerer<'_> {
             if value.is_empty() || (name == "mask-image" && value == "none") {
                 continue;
             }
+            // `filter` and `clip-path` may point at an SVG document (`url(data:...)`), whose
+            // markup could carry links and event handlers into our SVG: those are not drawn.
+            if matches!(name, "filter" | "clip-path") && value.contains("url(") {
+                self.report.warnings.push(format!(
+                    "<{tag}> #{}: {name} with url() is not drawn",
+                    el.dom_index
+                ));
+                continue;
+            }
             // Images Chrome downloaded are inlined as data: URLs; others cannot be drawn.
             let value = if value.contains("url(") {
                 match inline_urls(value, self.options.images) {
@@ -590,23 +599,33 @@ impl Lowerer<'_> {
                 .push(format!("{label}: transformed replaced element skipped"));
             return None;
         }
+        // Only what is inside the viewport is in the screenshot: crop that, and place it where it
+        // is in the element's box, at its own size. The crop holds Chrome's border too, so the
+        // element's node is given no border: its padding box is its border box.
         let b = el.bounds;
-        let rect = IntRect::from_xywh(
-            b.x.round() as i32,
-            b.y.round() as i32,
-            b.w.round() as u32,
-            b.h.round() as u32,
-        )?;
+        let (x0, y0) = (b.x.round().max(0.0), b.y.round().max(0.0));
+        let x1 = (b.x + b.w).round().min(shot.width() as f64);
+        let y1 = (b.y + b.h).round().min(shot.height() as f64);
+        let rect = IntRect::from_xywh(x0 as i32, y0 as i32, (x1 - x0) as u32, (y1 - y0) as u32)?;
+        if x1 < (b.x + b.w).round()
+            || y1 < (b.y + b.h).round()
+            || x0 > b.x.round()
+            || y0 > b.y.round()
+        {
+            self.report.warnings.push(format!(
+                "{label}: partly outside the viewport; only the visible part is drawn"
+            ));
+        }
         // As PNG bytes: takumi-svg 0.3.34 writes no `<image>` for `ImageSourceInput::Rgba`
         // (the raster backend does draw it); README, "Upstream candidates".
         let png = shot.clone_rect(rect)?.encode_png().ok()?;
         self.report.raster_fallbacks.push(label);
         let fill = self.style(&[
             ("position", "absolute".into()),
-            ("left", "0".into()),
-            ("top", "0".into()),
-            ("width", "100%".into()),
-            ("height", "100%".into()),
+            ("left", px(x0 - b.x)),
+            ("top", px(y0 - b.y)),
+            ("width", px(x1 - x0)),
+            ("height", px(y1 - y0)),
         ]);
         Some(
             Node::image(ImageData {

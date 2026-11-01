@@ -57,7 +57,10 @@ cd crates/html-to-svg-cli && ../../target/release/html-to-svg run pages/dashboar
 downloaded and drew with), `out.svg`, `takumi.png` (Takumi's own raster of the same tree),
 `svg-via-resvg.png`, and `diff-svg.png` / `diff-takumi.png` (orange = differs, but a pixel within
 1 px of the other picture matches it, so anti-aliasing or a sub-pixel shift; red = misplaced).
-Chromium comes from `$CHROME`, else `/opt/pw-browsers/chromium`, else chromiumoxide's own search.
+Chromium comes from `$CHROME`, else chromiumoxide's own search. Each capture runs Chrome with its
+sandbox, in a temporary profile of its own (removed afterwards), and with greyscale unhinted glyphs
+whatever the system's font settings. `--no-sandbox` (or `HTML_TO_SVG_NO_SANDBOX=1`, as the test
+container sets) turns the sandbox off, only for where Chrome cannot have one.
 
 `convert --assets DIR` writes the images the SVG would inline as `data:` URLs to `DIR` instead,
 named `<sha256>.<ext>` (a downloaded image keeps its URL's extension; screenshot crops are `.png`),
@@ -156,7 +159,8 @@ Steps that measurably mattered (each from the same capture):
 - **Annotations.** An element with `data-*` attributes gets a Takumi node id; the patched
   takumi-svg wraps *every paint chunk* of that node (background, content, outline, which can land
   far apart in paint order) in `<g data-takumi-node="…">`, and `annotate.rs` replaces that with
-  the element's real attributes plus `data-node` (the DOM index). Text lines carry the annotation
+  the element's real attributes plus `data-html-to-svg-node` (the DOM index; a name no page uses, so
+  a page's own `data-node` survives). `data-*` names XML does not allow are left out. Text lines carry the annotation
   of their nearest annotated ancestor; boxes carry only their own.
 
 ## The Takumi patch

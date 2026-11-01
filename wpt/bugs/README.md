@@ -14,8 +14,9 @@ What goes wrong, why (the code), the evidence (tests, pictures); how it was fixe
 ```
 
 A run fails when a test names a bug with no file here, when a bug's `regression-test` does not
-exist, or when a bug marked `fixed` still has failing tests. It lists open bugs none of whose tests
-fail any more, to be marked fixed.
+exist, or when a bug marked `fixed` still has failing tests. It lists open bugs whose WPT tests started
+passing in that run and none of which fail any more, to be marked fixed (a bug found outside
+WPT, held only by its Rust regression test, is never listed: that test says when it is fixed).
 
 A test that fails for several reasons names the one to fix first; the others go in the bug's text.
 

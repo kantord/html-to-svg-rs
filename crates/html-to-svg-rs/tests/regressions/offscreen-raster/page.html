@@ -1,0 +1,15 @@
+<!doctype html>
+<!-- Bug offscreen-raster: an element whose pixels come from Chrome's screenshot (here a canvas)
+     and that reaches past the viewport was cropped to the visible part and then stretched over
+     its whole box. -->
+<meta charset="utf-8">
+<title>offscreen-raster</title>
+<style>
+  body { margin: 0; }
+  canvas { position: absolute; left: 200px; top: 40px; }
+</style>
+<canvas width="200" height="120"></canvas>
+<script>
+  const ctx = document.querySelector("canvas").getContext("2d");
+  for (let i = 0; i < 10; i++) { ctx.fillStyle = i % 2 ? "#0ea5e9" : "#f97316"; ctx.fillRect(i * 20, 0, 20, 120); }
+</script>

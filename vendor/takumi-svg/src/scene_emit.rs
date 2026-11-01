@@ -132,7 +132,7 @@ impl ChunkWriter<'_, '_, '_> {
     };
     let doc = &mut *self.doc;
     let result = (|| {
-      // PATCH(chrome-svg): tag the chunk with its node's id (see `begin_annotation_group`).
+      // PATCH(html-to-svg): tag the chunk with its node's id (see `begin_annotation_group`).
       let annotation = placed
         .node
         .node

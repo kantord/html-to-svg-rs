@@ -3,6 +3,7 @@ name = "html-to-svg-rs"
 version = "0.1.0"
 edition = "2024"
 publish = false
+license.workspace = true
 
 [dependencies]
 takumi = { version = "2.19.0", default-features = false, features = ["raster-backend", "svg-backend", "svg-source", "image-decoding", "woff2", "woff"] }

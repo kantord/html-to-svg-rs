@@ -2,7 +2,7 @@
 //! (the `html-to-svg-rs` library does the work).
 //!
 //! ```text
-//! html-to-svg capture <url> <dir> [--size WxH] [--settle SECONDS]
+//! html-to-svg capture <url> <dir> [--size WxH] [--settle SECONDS] [--no-sandbox]
 //!                         Chrome -> dir/snapshot.json, chrome.png, fonts.json, fonts/
 //! html-to-svg convert <dir> [--font F]... [--no-fit] [--json] [--assets DIR [--assets-href P]]
 //!                         snapshot -> dir/out.svg + dir/takumi.png (fonts.json's faces are
@@ -29,6 +29,9 @@ struct Args {
     size: (u32, u32),
     settle: f64,
     fit_text: bool,
+    /// Run Chrome without its sandbox (also `HTML_TO_SVG_NO_SANDBOX=1`): only where it cannot
+    /// have one, e.g. some containers.
+    no_sandbox: bool,
     /// `convert` prints its report as one JSON object instead of text.
     json: bool,
     /// `convert` writes embedded images here instead of inlining them.
@@ -44,6 +47,7 @@ fn parse_args() -> Result<Args> {
         size: (1024, 768),
         settle: 2.0,
         fit_text: true,
+        no_sandbox: std::env::var("HTML_TO_SVG_NO_SANDBOX").is_ok_and(|v| v == "1"),
         json: false,
         assets: None,
         assets_href: None,
@@ -62,6 +66,7 @@ fn parse_args() -> Result<Args> {
             "--settle" => args.settle = it.next().context("--settle needs seconds")?.parse()?,
             "--no-fit" => args.fit_text = false,
             "--json" => args.json = true,
+            "--no-sandbox" => args.no_sandbox = true,
             "--assets" => args.assets = Some(it.next().context("--assets needs a folder")?.into()),
             "--assets-href" => {
                 args.assets_href = Some(it.next().context("--assets-href needs a prefix")?)
@@ -108,6 +113,7 @@ async fn capture(url: &str, dir: &Path, args: &Args) -> Result<()> {
     let settings = capture::Settings {
         size: args.size,
         settle: std::time::Duration::from_secs_f64(args.settle),
+        sandbox: !args.no_sandbox,
     };
     capture::capture(&url, dir, &settings).await?;
     println!(

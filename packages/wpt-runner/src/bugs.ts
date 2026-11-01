@@ -62,17 +62,23 @@ export async function bugProblems(repo: string, entries: Map<string, Entry>, bug
     for (const test of bug.regressionTests) {
       const [file, name] = test.split("::");
       const path = join(repo, file ?? "");
-      const ok = !!file && !!name && existsSync(path) && (await readFile(path, "utf8")).includes(`fn ${name}(`);
+      // A Rust test is `fn <name>(`; a Playwright test is named by its title in quotes.
+      const marker = file?.endsWith(".rs") ? `fn ${name}(` : `"${name}"`;
+      const ok = !!file && !!name && existsSync(path) && (await readFile(path, "utf8")).includes(marker);
       if (!ok) problems.push(`bug ${bug.id}: regression test ${test} does not exist`);
     }
   }
   return problems;
 }
 
-/** Open bugs none of whose tests fail any more: candidates to mark fixed. */
-export function closable(entries: Map<string, Entry>, bugs: Map<string, Bug>): Bug[] {
+/**
+ * Open bugs some of whose tests passed in this run (`passedNow`) and none of whose tests fail any
+ * more: candidates to mark fixed. A bug no WPT test is marked with (one found outside WPT, held
+ * only by its Rust regression test) is never listed.
+ */
+export function closable(entries: Map<string, Entry>, bugs: Map<string, Bug>, passedNow: Set<string>): Bug[] {
   const failing = new Set([...entries.values()].filter((e) => e.status === "bug").map((e) => e.bug));
-  return [...bugs.values()].filter((b) => b.status === "open" && !failing.has(b.id));
+  return [...bugs.values()].filter((b) => b.status === "open" && passedNow.has(b.id) && !failing.has(b.id));
 }
 
 /** How many tests each bug makes fail now. */

@@ -1,0 +1,32 @@
+{
+  "used": {
+    "13": [
+      {
+        "family": "Pacifico",
+        "postscript": "Pacifico-Regular",
+        "custom": true,
+        "glyphs": 18.0
+      }
+    ],
+    "14": [
+      {
+        "family": "Pacifico",
+        "postscript": "Pacifico-Regular",
+        "custom": true,
+        "glyphs": 8.0
+      }
+    ],
+    "17": [
+      {
+        "family": "Pacifico",
+        "postscript": "Pacifico-Regular",
+        "custom": true,
+        "glyphs": 10.0
+      }
+    ]
+  },
+  "web": {
+    "web-0.font": "http://localhost:8123/packages/test-fixtures/node_modules/@fontsource/pacifico/files/pacifico-latin-400-normal.woff2",
+    "web-1.font": "http://localhost:8123/packages/test-fixtures/node_modules/@fontsource/pacifico/files/pacifico-latin-ext-400-normal.woff2"
+  }
+}

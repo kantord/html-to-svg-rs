@@ -1,0 +1,12 @@
+<!doctype html>
+<meta charset="utf-8">
+<!-- Bug paint-order-follows-dom: a `z-index: -1` child of a box that is no stacking context paints
+     below that box's background (in the parent stacking context's negative layer). The lowering
+     paints children after their parent, so the "frame behind the button" covers the button. -->
+<title>negative-z-index</title>
+<style>
+  body { margin: 40px; }
+  .button { position: relative; width: 160px; height: 60px; background: #2563eb; }
+  .button::before { content: ""; position: absolute; inset: -8px; background: #0f172a; z-index: -1; }
+</style>
+<div class="button"></div>

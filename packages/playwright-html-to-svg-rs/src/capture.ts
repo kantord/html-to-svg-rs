@@ -9,7 +9,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { BrowserContext, Page, Response } from "@playwright/test";
+import type { BrowserContext, Page, Request, Response } from "@playwright/test";
 
 /**
  * Font and image responses of every page of a browser context, from when recording started:
@@ -49,10 +49,13 @@ export async function capture(
   await mkdir(join(dir, "fonts"), { recursive: true });
   await mkdir(join(dir, "images"), { recursive: true });
 
-  // Web fonts must be in before layout is read; the conversion assumes scroll position 0.
-  await page.evaluate(async () => {
+  // Web fonts must be in before layout is read; the conversion assumes scroll position 0, so the
+  // page is scrolled to the top for the capture and back where it was afterwards.
+  const scrolled = await page.evaluate(async () => {
+    const at = { x: window.scrollX, y: window.scrollY };
     window.scrollTo(0, 0);
     await document.fonts.ready;
+    return at;
   });
 
   const cdp = await page.context().newCDPSession(page);
@@ -83,13 +86,17 @@ export async function capture(
         const file = `img-${i}`;
         await writeFile(join(dir, "images", file), body);
         const mime = (response.headers()["content-type"] ?? "").split(";")[0].trim();
-        images[response.url()] = { file, mime };
+        // Under every URL of its redirect chain: the page's CSS names the first one.
+        for (let request: Request | null = response.request(); request; request = request.redirectedFrom()) {
+          images[request.url()] = { file, mime };
+        }
       }
     }
     await writeFile(join(dir, "fonts.json"), JSON.stringify({ used, web }, null, 2));
     await writeFile(join(dir, "images.json"), JSON.stringify({ images }, null, 2));
   } finally {
     await cdp.detach();
+    await page.evaluate(({ x, y }) => window.scrollTo(x, y), scrolled);
   }
 }
 

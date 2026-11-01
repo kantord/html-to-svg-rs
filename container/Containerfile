@@ -34,6 +34,9 @@ RUN corepack enable \
  && rm /tmp/package.json
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
+# Chrome cannot set up its sandbox inside this (rootless) container: captures run it without one.
+# Only trusted pages (the repository's own fixtures) are captured here.
+ENV HTML_TO_SVG_NO_SANDBOX=1
 # Inside this image a missing font is an error, not a reason to skip a test.
 ENV HTML_TO_SVG_TEST_ENV=container
 # Build output lives on a volume (see justfile), apart from the host's target/.

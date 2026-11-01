@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8">
+<!-- Bug clipping-follows-dom: `overflow: hidden` clips a descendant only when the box is in the
+     descendant's containing-block chain. The popup's containing block is .outer (positioned),
+     not .card, so Chrome draws it whole; the lowering nests it inside .card's clip. -->
+<title>overflow-popup</title>
+<style>
+  body { margin: 20px; }
+  .outer { position: relative; }
+  .card { overflow: hidden; width: 160px; height: 80px; background: #e2e8f0; }
+  .popup { position: absolute; top: 50px; left: 30px; width: 200px; height: 110px; background: #f97316; }
+</style>
+<div class="outer"><div class="card"><div class="popup"></div></div></div>

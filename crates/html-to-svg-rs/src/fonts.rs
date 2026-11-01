@@ -55,14 +55,16 @@ pub struct Registered {
 
 /// Registers every face `fonts.json` names. Faces that cannot be found or loaded are listed.
 pub fn register(dir: &Path, file: &FontsFile, fonts: &mut Fonts) -> Registered {
-    let mut by_postscript: HashMap<String, (Vec<u8>, u32)> = HashMap::new();
+    // A web font split by `unicode-range` is several files with one PostScript name (latin,
+    // latin-ext, ...): all of them are kept, and registered, each covering its own letters.
+    let mut by_postscript: HashMap<String, Vec<(Vec<u8>, u32)>> = HashMap::new();
     for name in file.web.keys() {
         let Ok(bytes) = std::fs::read(dir.join("fonts").join(name)) else {
             continue;
         };
         let Some(sfnt) = to_sfnt(bytes) else { continue };
         if let Some(ps) = postscript_name(&sfnt, 0) {
-            by_postscript.insert(ps, (sfnt, 0));
+            by_postscript.entry(ps).or_default().push((sfnt, 0));
         }
     }
     let system = system_fonts();
@@ -76,11 +78,11 @@ pub fn register(dir: &Path, file: &FontsFile, fonts: &mut Fonts) -> Registered {
         missing: Vec::new(),
     };
     for u in wanted {
-        let face = by_postscript.get(&u.postscript).cloned().or_else(|| {
+        let files = by_postscript.get(&u.postscript).cloned().or_else(|| {
             let (path, index) = system.get(&u.postscript)?;
-            Some((std::fs::read(path).ok()?, *index))
+            Some(vec![(std::fs::read(path).ok()?, *index)])
         });
-        let Some((bytes, index)) = face else {
+        let Some(files) = files else {
             result.missing.push(format!(
                 "{} ({})",
                 u.postscript,
@@ -88,28 +90,30 @@ pub fn register(dir: &Path, file: &FontsFile, fonts: &mut Fonts) -> Registered {
             ));
             continue;
         };
-        if index != 0 {
-            // Takumi takes the first face of a collection; a later one is reported, not guessed.
-            result
-                .missing
-                .push(format!("{} (face {index} of a collection)", u.postscript));
-            continue;
+        for (bytes, index) in files {
+            if index != 0 {
+                // Takumi takes the first face of a collection; a later one is reported, not guessed.
+                result
+                    .missing
+                    .push(format!("{} (face {index} of a collection)", u.postscript));
+                continue;
+            }
+            // Under its alias (asked for by the lowering), and under its own family name, so text
+            // Chrome reported no face for (inside some shadow trees) still resolves the page's
+            // `font-family` list to the same files.
+            let aliased = FontResource::new(bytes.clone()).override_info(FontOverride {
+                family_name: Some(alias(&u.postscript).into()),
+                ..FontOverride::default()
+            });
+            match fonts.register(aliased) {
+                Ok(_) => result.faces += 1,
+                Err(e) => result.missing.push(format!("{}: {e}", u.postscript)),
+            }
+            let _ = fonts.register(FontResource::new(bytes).override_info(FontOverride {
+                family_name: Some(u.family.clone().into()),
+                ..FontOverride::default()
+            }));
         }
-        // Under its alias (asked for by the lowering), and under its own family name, so text
-        // Chrome reported no face for (inside some shadow trees) still resolves the page's
-        // `font-family` list to the same files.
-        let aliased = FontResource::new(bytes.clone()).override_info(FontOverride {
-            family_name: Some(alias(&u.postscript).into()),
-            ..FontOverride::default()
-        });
-        match fonts.register(aliased) {
-            Ok(_) => result.faces += 1,
-            Err(e) => result.missing.push(format!("{}: {e}", u.postscript)),
-        }
-        let _ = fonts.register(FontResource::new(bytes).override_info(FontOverride {
-            family_name: Some(u.family.clone().into()),
-            ..FontOverride::default()
-        }));
     }
     result
 }

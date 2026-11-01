@@ -1,0 +1,11 @@
+<!doctype html>
+<!-- Bug url-parentheses: a `url()` ended at the first `)`, so a data URI with `rgb(...)` in it was
+     cut short and its image lost. -->
+<meta charset="utf-8">
+<title>data-url-parentheses</title>
+<style>
+  body { margin: 20px; }
+  div { width: 200px; height: 120px;
+        background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect width='10' height='10' fill='rgb(220,38,38)'/%3E%3C/svg%3E") 0 0 / 20px 20px; }
+</style>
+<div></div>

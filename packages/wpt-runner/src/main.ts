@@ -318,7 +318,7 @@ async function runTests(args: Args): Promise<number> {
     console.log(`\nOpen bugs (${open.length}):`);
     for (const b of open) console.log(`  ${b.id}: ${perBug.get(b.id) ?? 0} failing tests  ${b.title}`);
   }
-  list("Open bugs none of whose tests fail any more: mark them fixed?", closable(entries, bugs).map((b) => ({ test: `wpt/bugs/${b.id}.md` })));
+  list("Open bugs none of whose tests fail any more: mark them fixed?", closable(entries, bugs, new Set(changes.flatMap((c) => (c.kind === "fixed" && c.bug ? [c.bug] : [])))).map((b) => ({ test: `wpt/bugs/${b.id}.md` })));
   const problems = await bugProblems(REPO, entries, bugs);
   list("PROBLEMS with bugs", problems.map((test) => ({ test })));
   const untriaged = [...entries.values()].filter((e) => e.status === "fail").length;

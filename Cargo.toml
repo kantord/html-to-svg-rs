@@ -2,6 +2,9 @@
 resolver = "3"
 members = ["crates/*"]
 
+[workspace.package]
+license = "Apache-2.0"
+
 # Carries node ids into the SVG output (see vendor/takumi-svg-annotations.patch and
 # README.md).
 [patch.crates-io]

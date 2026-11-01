@@ -1,10 +1,17 @@
 //! Moves the images an SVG embeds as `data:` URLs into a shared folder, named by content, so many
 //! SVGs that show the same image (a logo on every page) store it once.
 //!
-//! Every quoted `"data:<mime>;base64,..."` attribute value of the SVG (`<image href>`, pattern
-//! images) is decoded, written to `<dir>/<sha256>.<ext>` unless that file exists, and replaced by
-//! `<href_prefix><sha256>.<ext>`. The extension is the original URL's when the bytes are an image
-//! Chrome downloaded, else the MIME type's (crops of Chrome's screenshot are `.png`).
+//! The `href` of every `<image>` the renderer wrote with a base64 `data:` URL is decoded, written
+//! to `<dir>/<sha256>.<ext>` unless that file exists, and replaced by
+//! `<href_prefix><sha256>.<ext>`. Nothing else is touched: the page's own `data-*` attributes
+//! can hold `data:` URLs too, and must reach the SVG as they are.
+//!
+//! The folder may be served from a site, so only raster images go there, and their type is read
+//! from their bytes, never taken from the page: a page cannot place an `.svg` or `.html` file
+//! (that would run its scripts on the serving site) by naming a URL or a MIME type. A downloaded
+//! image keeps its URL's extension when that names the same type (`photo.jpeg` stays `.jpeg`);
+//! otherwise the type's own extension is used (`avatar.php` holding a PNG becomes `.png`).
+//! Everything else (SVG images, unknown bytes) stays inline.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -31,9 +38,9 @@ pub fn hash(bytes: &[u8]) -> String {
         .collect()
 }
 
-/// Replaces the SVG's base64 `data:` URLs by files in `options.dir`. `known` maps a content hash
-/// to the extension of the URL those bytes were downloaded from. Returns the new SVG and the
-/// file names it refers to (each once, in order of first use).
+/// Replaces the base64 `data:` URLs of the SVG's `<image>` elements by files in `options.dir`.
+/// `known` maps a content hash to the extension of the URL those bytes were downloaded from.
+/// Returns the new SVG and the file names it refers to (each once, in order of first use).
 pub fn externalize(
     svg: &str,
     options: &AssetsOptions,
@@ -44,20 +51,36 @@ pub fn externalize(
     let mut out = String::with_capacity(svg.len() / 4);
     let mut files = Vec::new();
     let mut rest = svg;
-    while let Some(at) = rest.find("\"data:") {
-        out.push_str(&rest[..=at]);
-        let value_start = at + 1;
-        let Some(len) = rest[value_start..].find('"') else {
-            break;
+    while let Some(at) = rest.find("<image") {
+        // The tag's attributes, up to its `>`; the value of its `href`, if a `data:` URL.
+        let tag_end = rest[at..].find('>').map_or(rest.len(), |e| at + e);
+        let href = ["href=\"data:", "xlink:href=\"data:"]
+            .iter()
+            .filter_map(|a| {
+                rest[at..tag_end]
+                    .find(a)
+                    .map(|i| at + i + a.len() - "data:".len())
+            })
+            .min();
+        let Some(value_start) = href else {
+            out.push_str(&rest[..tag_end]);
+            rest = &rest[tag_end..];
+            continue;
         };
+        let Some(len) = rest[value_start..tag_end].find('"') else {
+            out.push_str(&rest[..tag_end]);
+            rest = &rest[tag_end..];
+            continue;
+        };
+        out.push_str(&rest[..value_start]);
         let value = &rest[value_start..value_start + len];
-        match decode(value) {
-            Some((mime, bytes)) => {
+        match decode(value).and_then(|bytes| Some((raster_type(&bytes)?, bytes))) {
+            Some((kind, bytes)) => {
                 let digest = hash(&bytes);
                 let ext = known
                     .get(&digest)
-                    .cloned()
-                    .unwrap_or_else(|| extension_for_mime(mime).to_owned());
+                    .filter(|ext| kind.extensions.contains(&ext.as_str()))
+                    .map_or(kind.extensions[0], String::as_str);
                 let name = format!("{digest}.{ext}");
                 write_once(&options.dir.join(&name), &bytes)?;
                 out.push_str(&escape(&options.href_prefix));
@@ -66,7 +89,7 @@ pub fn externalize(
                     files.push(name);
                 }
             }
-            // Not base64 (e.g. a URL-encoded SVG): small, left inline.
+            // Not base64, not a raster image we know by its bytes (an SVG): left inline.
             None => out.push_str(value),
         }
         rest = &rest[value_start + len..];
@@ -75,29 +98,62 @@ pub fn externalize(
     Ok((out, files))
 }
 
-/// `data:<mime>[;params];base64,<payload>` -> (mime, bytes).
-fn decode(value: &str) -> Option<(&str, Vec<u8>)> {
+/// `data:<mime>[;params];base64,<payload>` -> the bytes. The MIME type is the page's word and is
+/// not used: the bytes say what they are (`raster_type`).
+fn decode(value: &str) -> Option<Vec<u8>> {
     let (header, payload) = value.strip_prefix("data:")?.split_once(',')?;
-    let mime = header.strip_suffix(";base64")?;
-    let mime = mime.split(';').next().unwrap_or(mime);
-    let bytes = base64::engine::general_purpose::STANDARD
+    header.ends_with(";base64").then_some(())?;
+    base64::engine::general_purpose::STANDARD
         .decode(payload.trim())
-        .ok()?;
-    Some((mime, bytes))
+        .ok()
 }
 
-fn extension_for_mime(mime: &str) -> &str {
-    match mime {
-        "image/png" => "png",
-        "image/jpeg" => "jpg",
-        "image/gif" => "gif",
-        "image/webp" => "webp",
-        "image/avif" => "avif",
-        "image/svg+xml" => "svg",
-        "image/bmp" => "bmp",
-        "image/x-icon" | "image/vnd.microsoft.icon" => "ico",
-        _ => "bin",
-    }
+/// A raster image type: the extensions that name it, its own first.
+struct RasterType {
+    extensions: &'static [&'static str],
+}
+
+/// The raster type of some bytes, by their signature; `None` for anything else (SVG, HTML, ...).
+fn raster_type(bytes: &[u8]) -> Option<RasterType> {
+    let extensions: &'static [&'static str] = match bytes {
+        [0x89, b'P', b'N', b'G', ..] => &["png", "apng"],
+        [0xFF, 0xD8, 0xFF, ..] => &["jpg", "jpeg", "jpe", "jfif"],
+        [b'G', b'I', b'F', b'8', ..] => &["gif"],
+        [
+            b'R',
+            b'I',
+            b'F',
+            b'F',
+            _,
+            _,
+            _,
+            _,
+            b'W',
+            b'E',
+            b'B',
+            b'P',
+            ..,
+        ] => &["webp"],
+        [
+            _,
+            _,
+            _,
+            _,
+            b'f',
+            b't',
+            b'y',
+            b'p',
+            b'a',
+            b'v',
+            b'i',
+            b'f',
+            ..,
+        ] => &["avif"],
+        [b'B', b'M', ..] => &["bmp"],
+        [0, 0, 1, 0, ..] => &["ico"],
+        _ => return None,
+    };
+    Some(RasterType { extensions })
 }
 
 /// The extension of a URL's last path segment, when it looks like one (`logo.PNG` -> `png`).
@@ -116,7 +172,10 @@ fn write_once(path: &Path, bytes: &[u8]) -> Result<()> {
     if path.exists() {
         return Ok(());
     }
-    let tmp = path.with_extension(format!("tmp-{}", std::process::id()));
+    // Unique per process and per call: threads of one process may write the same asset at once.
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = path.with_extension(format!("tmp-{}-{n}", std::process::id()));
     std::fs::write(&tmp, bytes).with_context(|| format!("write {}", tmp.display()))?;
     std::fs::rename(&tmp, path).with_context(|| format!("move into {}", path.display()))?;
     Ok(())
@@ -130,34 +189,75 @@ fn escape(v: &str) -> String {
 mod tests {
     use super::*;
 
-    #[test]
-    fn moves_data_urls_into_content_addressed_files() {
-        let dir = std::env::temp_dir().join(format!("html-to-svg-assets-{}", std::process::id()));
+    const PNG: &[u8] = b"\x89PNG\r\n\x1a\nfake png";
+    const JPEG: &[u8] = b"\xFF\xD8\xFF\xE0fake jpeg";
+
+    fn b64(bytes: &[u8]) -> String {
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    }
+
+    fn options(name: &str) -> AssetsOptions {
+        let dir =
+            std::env::temp_dir().join(format!("html-to-svg-assets-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        let png = base64::engine::general_purpose::STANDARD.encode(b"fake png");
-        let jpeg = base64::engine::general_purpose::STANDARD.encode(b"fake jpeg");
-        let svg = format!(
-            r#"<image href="data:image/png;base64,{png}"/><image href="data:image/png;base64,{png}"/><image href="data:image/jpeg;base64,{jpeg}"/><image href="data:image/svg+xml,%3Csvg/%3E"/>"#
-        );
-        // The JPEG was downloaded from a URL ending in `.jpeg`: that wins over the MIME's `jpg`.
-        let known = BTreeMap::from([(hash(b"fake jpeg"), "jpeg".to_owned())]);
-        let options = AssetsOptions {
-            dir: dir.clone(),
+        AssetsOptions {
+            dir,
             href_prefix: "../assets/".to_owned(),
-        };
+        }
+    }
+
+    #[test]
+    fn moves_image_data_urls_into_content_addressed_files() {
+        let (png, jpeg) = (b64(PNG), b64(JPEG));
+        let svg = format!(
+            r#"<image href="data:image/png;base64,{png}"/><image href="data:image/png;base64,{png}"/><image x="1" xlink:href="data:image/jpeg;base64,{jpeg}"/><image href="data:image/svg+xml,%3Csvg/%3E"/>"#
+        );
+        // The JPEG was downloaded from a URL ending in `.jpeg`: same type, so that wins.
+        let known = BTreeMap::from([(hash(JPEG), "jpeg".to_owned())]);
+        let options = options("move");
 
         let (out, files) = externalize(&svg, &options, &known).unwrap();
 
-        let (p, j) = (hash(b"fake png"), hash(b"fake jpeg"));
+        let (p, j) = (hash(PNG), hash(JPEG));
         assert_eq!(
             out,
             format!(
-                r#"<image href="../assets/{p}.png"/><image href="../assets/{p}.png"/><image href="../assets/{j}.jpeg"/><image href="data:image/svg+xml,%3Csvg/%3E"/>"#
+                r#"<image href="../assets/{p}.png"/><image href="../assets/{p}.png"/><image x="1" xlink:href="../assets/{j}.jpeg"/><image href="data:image/svg+xml,%3Csvg/%3E"/>"#
             )
         );
         assert_eq!(files, [format!("{p}.png"), format!("{j}.jpeg")]);
-        assert_eq!(std::fs::read(dir.join(&files[0])).unwrap(), b"fake png");
-        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(std::fs::read(options.dir.join(&files[0])).unwrap(), PNG);
+        std::fs::remove_dir_all(&options.dir).unwrap();
+    }
+
+    #[test]
+    fn a_page_cannot_place_files_of_its_choosing() {
+        let script =
+            b64(b"<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>");
+        let png = b64(PNG);
+        let svg = format!(
+            concat!(
+                // The page's own attribute, carried into the SVG: never touched.
+                r#"<g data-x="data:text/html;base64,{s}">"#,
+                // An image whose bytes are SVG, labelled as PNG: stays inline.
+                r#"<image href="data:image/png;base64,{s}"/>"#,
+                // A PNG downloaded from `avatar.php`: written as `.png`.
+                r#"<image href="data:image/png;base64,{p}"/></g>"#,
+            ),
+            s = script,
+            p = png
+        );
+        let known = BTreeMap::from([(hash(PNG), "php".to_owned())]);
+        let options = options("hostile");
+
+        let (out, files) = externalize(&svg, &options, &known).unwrap();
+
+        assert_eq!(files, [format!("{}.png", hash(PNG))]);
+        assert!(out.contains(&format!(r#"data-x="data:text/html;base64,{script}""#)));
+        assert!(out.contains(&format!(
+            r#"<image href="data:image/png;base64,{script}"/>"#
+        )));
+        std::fs::remove_dir_all(&options.dir).unwrap();
     }
 
     #[test]

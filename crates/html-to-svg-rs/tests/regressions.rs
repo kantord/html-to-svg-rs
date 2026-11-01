@@ -86,22 +86,30 @@ fn case(name: &str, bug: &str) {
         .join(name);
     let conversion = convert(&dir, &ConvertOptions::default()).expect("convert");
     let chrome = Pixmap::load_png(dir.join("chrome.png")).expect("chrome.png");
-    let tree = resvg::usvg::Tree::from_str(&conversion.svg, &resvg::usvg::Options::default())
-        .expect("parse SVG");
-    let mut ours = Pixmap::new(chrome.width(), chrome.height()).expect("size");
-    ours.fill(resvg::tiny_skia::Color::WHITE);
-    resvg::render(
-        &tree,
-        resvg::tiny_skia::Transform::identity(),
-        &mut ours.as_mut(),
-    );
-
     let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
         .join("regressions")
         .join(name);
     std::fs::create_dir_all(&out).expect("create output folder");
-    ours.save_png(out.join("ours.png")).expect("write ours.png");
-    let count = misplaced(&chrome, &ours, &out.join("diff.png"));
+    std::fs::write(out.join("out.svg"), &conversion.svg).expect("write out.svg");
+    // An SVG that does not even parse (invalid XML) is the worst mismatch there is.
+    let count = match resvg::usvg::Tree::from_str(&conversion.svg, &resvg::usvg::Options::default())
+    {
+        Ok(tree) => {
+            let mut ours = Pixmap::new(chrome.width(), chrome.height()).expect("size");
+            ours.fill(resvg::tiny_skia::Color::WHITE);
+            resvg::render(
+                &tree,
+                resvg::tiny_skia::Transform::identity(),
+                &mut ours.as_mut(),
+            );
+            ours.save_png(out.join("ours.png")).expect("write ours.png");
+            misplaced(&chrome, &ours, &out.join("diff.png"))
+        }
+        Err(e) => {
+            println!("{name}: the SVG does not parse: {e}");
+            usize::MAX
+        }
+    };
     println!(
         "{name}: {count} misplaced pixels (pictures in {})",
         out.display()
@@ -162,4 +170,59 @@ fn background_origin_content_box() {
 #[test]
 fn corner_shape_bevel() {
     case("corner-shape-bevel", "corner-shape-not-forwarded");
+}
+
+#[test]
+fn duplicate_data_node() {
+    case("duplicate-data-node", "annotation-attribute-names");
+}
+
+#[test]
+fn data_url_parentheses() {
+    case("data-url-parentheses", "url-parentheses");
+}
+
+/// Not by pixels: our glyph outlines (drawn by resvg) and Chrome's font rasterizer differ at every
+/// glyph edge, and a comparison lenient enough for that does not see a wrong font either. Chrome
+/// downloaded two `unicode-range` files of one face; both must be registered.
+#[test]
+fn font_subsets() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/regressions/font-subsets");
+    let faces = convert(&dir, &ConvertOptions::default())
+        .expect("convert")
+        .fonts
+        .faces;
+    let files = std::fs::read_dir(dir.join("fonts"))
+        .expect("fonts/")
+        .count();
+    assert_eq!(
+        files, 2,
+        "the capture should hold the latin and latin-ext files"
+    );
+    match bug_status("font-subsets").as_str() {
+        "open" => assert!(
+            faces < files,
+            "all {files} subset files are registered: bug font-subsets looks fixed; set `status: fixed` in wpt/bugs/font-subsets.md"
+        ),
+        "fixed" => assert_eq!(
+            faces, files,
+            "only {faces} of {files} subset files are registered, but bug font-subsets is marked fixed"
+        ),
+        other => panic!("wpt/bugs/font-subsets.md: unknown status {other:?}"),
+    }
+}
+
+#[test]
+fn offscreen_raster() {
+    case("offscreen-raster", "offscreen-raster");
+}
+
+#[test]
+fn overflow_popup() {
+    case("overflow-popup", "clipping-follows-dom");
+}
+
+#[test]
+fn negative_z_index() {
+    case("negative-z-index", "paint-order-follows-dom");
 }
