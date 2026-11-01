@@ -61,11 +61,11 @@ export function passes(test: Reftest, pictures: { ref: string; relation: "==" | 
 
 /** How our SVG differs from Chrome's picture of the same page (see `fidelity`). */
 export interface Fidelity {
-  /** Misplaced pixels outside text boxes (see `fidelity`). */
+  /** Misplaced pixels outside the text layer (see `fidelity`, `textMask`). */
   outside: number;
-  /** Misplaced pixels inside text boxes. */
+  /** Misplaced pixels in the text layer. */
   text: number;
-  /** Pixels outside text boxes that are not exactly equal: faint shading differences included. */
+  /** Pixels outside the text layer that are not exactly equal: faint shading differences included. */
   exact: number;
   /**
    * Chrome's picture faded: red where outside text is misplaced, pink where it differs only
@@ -74,8 +74,32 @@ export interface Fidelity {
   picture: Buffer;
 }
 
-/** Text boxes `[left, top, right, bottom)` in pixels. */
-export type Box = [number, number, number, number];
+/**
+ * The text layer: the pixels where Chrome's picture of the page differs from Chrome's picture of
+ * the same page with its text made invisible (`HIDE_TEXT` in main.ts, which changes no layout),
+ * grown by a pixel for the anti-aliasing at glyph edges. Glyphs, underlines, text shadows and
+ * glyphs reaching past their line box are in it; the background between and under the glyphs is
+ * not.
+ */
+export function textMask(chromePng: Buffer, textlessPng: Buffer): Uint8Array {
+  const a = PNG.sync.read(chromePng);
+  const b = PNG.sync.read(textlessPng);
+  const { width, height } = a;
+  const mask = new Uint8Array(width * height);
+  if (b.width !== width || b.height !== height) return mask;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (a.data[i] === b.data[i] && a.data[i + 1] === b.data[i + 1] && a.data[i + 2] === b.data[i + 2]) continue;
+      for (let dy = -1; dy <= 1; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= height) continue;
+        mask.fill(1, ny * width + Math.max(0, x - 1), ny * width + Math.min(width, x + 2));
+      }
+    }
+  }
+  return mask;
+}
 
 /**
  * Compares Chrome's screenshot with our SVG drawn by the same Chrome. A pixel is *misplaced* when
@@ -83,21 +107,15 @@ export type Box = [number, number, number, number];
  * content that is missing, extra or in the wrong place, as opposed to edges anti-aliased
  * differently (a rounded corner drawn by Chrome as a rounded rectangle and by our SVG as a path:
  * measured up to about 30 pixels on WPT's border-radius tests) and faint shading differences
- * (gradients, blur). Glyph edges inside text boxes always differ (our SVG draws outlines, Chrome
- * draws from the font: about a third of the pixels in text boxes), so text and the rest are
- * counted apart.
+ * (gradients, blur). Glyph edges always differ (our SVG draws outlines, Chrome draws from the
+ * font: about a third of the pixels inside text boxes), so the text layer (`textMask`) and the
+ * rest are counted apart.
  */
-export function fidelity(chromePng: Buffer, svgPng: Buffer, boxes: Box[]): Fidelity {
+export function fidelity(chromePng: Buffer, svgPng: Buffer, inText: Uint8Array): Fidelity {
   const chrome = PNG.sync.read(chromePng);
   const svg = PNG.sync.read(svgPng);
   const { width, height } = chrome;
   const sameSize = svg.width === width && svg.height === height;
-  const inText = new Uint8Array(width * height);
-  for (const [l, t, r, b] of boxes) {
-    for (let y = Math.max(0, t); y < Math.min(height, b); y++) {
-      inText.fill(1, y * width + Math.max(0, l), y * width + Math.min(width, r));
-    }
-  }
   const channel = (a: PNG, i: number, b: PNG, j: number) =>
     Math.max(
       Math.abs(a.data[i] - b.data[j]),

@@ -10,8 +10,9 @@
 //      judged by WPT's own rules. If Chrome fails, the test is `chrome-fails` and that is all.
 //   2. The comparison Chrome, with unhinted greyscale glyphs (container/fonts-nohint.conf): the
 //      test page is captured and converted, our SVG is drawn by the same Chrome, and the two
-//      pictures are compared (`fidelity` in compare.ts): misplaced pixels, outside text and
-//      inside text boxes apart. Within the thresholds below, the test passes.
+//      pictures are compared (`fidelity` in compare.ts): misplaced pixels, in the text layer and
+//      the rest apart. The text layer is where Chrome's picture changes when the page's text is
+//      made invisible (`textMask`). Within the thresholds below, the test passes.
 // Captures of tests that do not pass stay under out/wpt/<test path>/, with svg.png (our SVG,
 // drawn) and diff.png; references' screenshots under out/wpt/refs/.
 //
@@ -27,7 +28,7 @@ import { promisify } from "node:util";
 import { type Browser, type BrowserContext, chromium, type Page } from "@playwright/test";
 import { capture, convert, ResourceRecorder, styles } from "playwright-html-to-svg-rs";
 
-import { type Box, difference, fidelity, passes } from "./compare.ts";
+import { difference, fidelity, passes, textMask } from "./compare.ts";
 import { readReftests, type Reftest } from "./manifest.ts";
 import { OUT, refPicture, REPO, RESULTS, testFolder } from "./paths.ts";
 import { writeReport } from "./report.ts";
@@ -61,7 +62,20 @@ const COMPARISON_CHROME = {
 };
 
 /**
- * A test passes when our SVG has at most this many misplaced pixels outside text boxes and inside
+ * Makes text invisible without changing layout or any other paint: not `color: transparent`,
+ * which would also hide borders and backgrounds drawn in `currentColor`.
+ */
+const HIDE_TEXT = `*, *::before, *::after, *::marker, *::first-letter, *::first-line {
+  -webkit-text-fill-color: transparent !important;
+  -webkit-text-stroke-color: transparent !important;
+  text-shadow: none !important;
+  text-decoration-color: transparent !important;
+  text-emphasis-color: transparent !important;
+  caret-color: transparent !important;
+}`;
+
+/**
+ * A test passes when our SVG has at most this many misplaced pixels outside the text layer and in
  * them (`fidelity` in compare.ts). Calibrated on all 909 compared tests of the two areas: rounded
  * edges anti-aliased differently reach about 30; past 30 the number of passing tests barely
  * moves (490 at 30, 506 at 100), the rest differing by thousands of pixels.
@@ -165,14 +179,15 @@ class Job {
     await open(this.page, test.url, test.long);
     await capture(this.page, dir, await styles(args.binary), this.recorder);
     const { svg } = await convert(args.binary, dir);
+    // The same page with its text invisible: where it differs from chrome.png is the text layer.
+    const hide = await this.page.addStyleTag({ content: HIDE_TEXT });
+    const textless = await this.page.screenshot({ scale: "css" });
+    await hide.evaluate((style) => (style as Element).remove());
     await this.canvas.setContent(`<body style="margin:0">${svg}</body>`);
     const drawn = await this.canvas.screenshot({ scale: "css" });
-    const snapshot = JSON.parse(await readFile(join(dir, "snapshot.json"), "utf8"));
-    // Chrome's text boxes, grown by a pixel for the anti-aliasing at their edges.
-    const boxes: Box[] = (snapshot.documents[0]?.textBoxes?.bounds ?? []).map(
-      ([x, y, w, h]: number[]) => [Math.floor(x) - 1, Math.floor(y) - 1, Math.ceil(x + w) + 1, Math.ceil(y + h) + 1],
-    );
-    const result = fidelity(await readFile(join(dir, "chrome.png")), drawn, boxes);
+    const chrome = await readFile(join(dir, "chrome.png"));
+    const result = fidelity(chrome, drawn, textMask(chrome, textless));
+    await writeFile(join(dir, "textless.png"), textless);
     await writeFile(join(dir, "svg.png"), drawn);
     await writeFile(join(dir, "diff.png"), result.picture);
     return { outside: result.outside, text: result.text, exact: result.exact };

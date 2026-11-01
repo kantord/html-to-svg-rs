@@ -42,16 +42,25 @@ WPT's own assertion (a test looks like its reference) is Chrome's to pass, not o
    - **edges anti-aliased differently**: Chrome draws a rounded rectangle, our SVG the same shape
      as a path (measured up to about 30 pixels on WPT's border-radius tests);
    - **glyph edges**: our SVG draws glyphs as outlines, Chrome draws them from the font, and their
-     edges always differ (about a third of the pixels inside text boxes, whatever Chrome's font
-     settings);
+     edges always differ (measured: about a third of the pixels inside text boxes, whatever
+     Chrome's font settings);
    - **faint shading differences**: gradients, blur.
 
-   The `score` counts misplaced pixels outside and inside the text boxes Chrome reported apart,
-   and, for information, the pixels outside text that are not exactly equal (`exact`). A test
-   passes with at most 30 of each (`THRESHOLD` in `packages/wpt-runner/src/main.ts`): calibrated
-   on all 909 compared tests, where past 30 the number of passing tests barely moves (490 at 30,
-   506 at 100) and the rest differ by thousands of pixels. A passing test whose misplaced count
-   grows by more than 10 is listed as "got worse" without failing the run.
+   **The text layer** is where Chrome's picture changes when the page's text is made invisible:
+   after the capture, the runner adds CSS that hides glyphs and nothing else
+   (`-webkit-text-fill-color`, `text-shadow`, `text-decoration-color` and `text-emphasis-color`
+   transparent, `HIDE_TEXT` in main.ts; not `color`, which would hide `currentColor` borders too),
+   takes a second screenshot (`textless.png`), and the differing pixels, grown by one for glyph
+   edges, are the text layer. Glyphs, underlines, shadows and glyphs reaching past their line box
+   are in it; the background between and under the glyphs is not, and is held to the same rule
+   as every other box.
+
+   The `score` counts misplaced pixels in the text layer and outside it apart, and, for
+   information, the pixels outside it that are not exactly equal (`exact`). A test passes with at
+   most 30 of each (`THRESHOLD` in `packages/wpt-runner/src/main.ts`): calibrated on all 909
+   compared tests, where past 30 the number of passing tests barely moves (490 at 30, 506 at 100)
+   and the rest differ by thousands of pixels. A passing test whose misplaced count grows by more
+   than 10 is listed as "got worse" without failing the run.
 
 Why not WPT's flags for the comparison too: they change text layout (measured on 20 pages: line
 widths 9 px from what the converter measures for the same font, against 0.1 px without them).

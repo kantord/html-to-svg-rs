@@ -31,11 +31,11 @@ export interface Run {
 
 /** How far our SVG is from Chrome's picture (see `fidelity` in compare.ts), in pixels. */
 export interface Score {
-  /** Misplaced outside text boxes: decides the verdict with `text`. */
+  /** Misplaced outside the text layer: decides the verdict with `text`. */
   outside: number;
-  /** Misplaced inside text boxes. */
+  /** Misplaced in the text layer (`textMask` in compare.ts). */
   text: number;
-  /** Not exactly equal outside text boxes: for information (faint shading differences). */
+  /** Not exactly equal outside the text layer: for information (faint shading differences). */
   exact: number;
 }
 
