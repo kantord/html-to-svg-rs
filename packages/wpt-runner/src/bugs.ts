@@ -3,7 +3,7 @@
 //   ---
 //   title: XHTML documents lose their images and page background
 //   status: open                      # or: fixed
-//   regression-test: crates/html-to-svg-rs/src/snapshot.rs::xhtml_tag_names   # optional
+//   regression-test: crates/html-to-svg-rs/tests/regressions.rs::xhtml_canvas   # optional, comma separated
 //   ---
 //   What goes wrong, why, the evidence; how it was fixed, once it is.
 //
@@ -20,8 +20,8 @@ export interface Bug {
   id: string;
   title: string;
   status: "open" | "fixed";
-  /** `<file>::<test name>`: the Rust test that holds the case. */
-  regressionTest?: string;
+  /** `<file>::<test name>`, comma separated: the Rust tests that hold the case. */
+  regressionTests: string[];
 }
 
 export async function loadBugs(repo: string): Promise<Map<string, Bug>> {
@@ -37,7 +37,7 @@ export async function loadBugs(repo: string): Promise<Map<string, Bug>> {
       id,
       title: field("title") ?? id,
       status: field("status") === "fixed" ? "fixed" : "open",
-      regressionTest: field("regression-test"),
+      regressionTests: (field("regression-test") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
     });
   }
   return bugs;
@@ -59,11 +59,12 @@ export async function bugProblems(repo: string, entries: Map<string, Entry>, bug
     }
   }
   for (const bug of bugs.values()) {
-    if (!bug.regressionTest) continue;
-    const [file, name] = bug.regressionTest.split("::");
-    const path = join(repo, file ?? "");
-    const ok = !!file && !!name && existsSync(path) && (await readFile(path, "utf8")).includes(name);
-    if (!ok) problems.push(`bug ${bug.id}: regression test ${bug.regressionTest} does not exist`);
+    for (const test of bug.regressionTests) {
+      const [file, name] = test.split("::");
+      const path = join(repo, file ?? "");
+      const ok = !!file && !!name && existsSync(path) && (await readFile(path, "utf8")).includes(`fn ${name}(`);
+      if (!ok) problems.push(`bug ${bug.id}: regression test ${test} does not exist`);
+    }
   }
   return problems;
 }

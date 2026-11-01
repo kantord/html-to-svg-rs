@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bug xhtml-tag-case: in XHTML Chrome reports tag names in lower case. The canvas must be
+     cropped from Chrome's screenshot; the page background must cover the canvas. -->
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>xhtml-tag-case</title>
+<style>
+  html { background: #fde68a; }
+  body { margin: 20px; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+  <canvas width="200" height="120"></canvas>
+  <script>
+    const ctx = document.querySelector("canvas").getContext("2d");
+    ctx.fillStyle = "#0ea5e9"; ctx.fillRect(0, 0, 200, 120);
+    ctx.fillStyle = "#ef4444"; ctx.fillRect(40, 30, 120, 60);
+  </script>
+</body>
+</html>

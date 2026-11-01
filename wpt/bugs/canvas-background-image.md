@@ -1,6 +1,7 @@
 ---
 title: Only the root's background colour covers the canvas, not its background image
 status: open
+regression-test: crates/html-to-svg-rs/tests/regressions.rs::canvas_background_image
 ---
 CSS paints the root element's background (or else the body's) over the whole canvas: colour and
 images alike, images positioned against the root element. `canvas_background`

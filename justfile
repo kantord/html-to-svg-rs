@@ -30,3 +30,15 @@ wpt *ARGS: image
 wpt-report: image
     {{run}} bash -c 'pnpm install --frozen-lockfile && wpt/serve.sh >/dev/null && node packages/wpt-runner/src/main.ts report'
     -@xdg-open out/wpt/report.html >/dev/null 2>&1 || echo "open out/wpt/report.html"
+
+# Capture the Rust regression fixtures (crates/html-to-svg-rs/tests/regressions/<name>/page.*)
+# with Chrome, in the test container: `just regression-capture` for all, or name some. The page
+# is served over HTTP from the repository root, so web fonts and images are real responses.
+regression-capture *NAMES: image
+    {{run}} bash -c 'set -e; cargo build -q -p html-to-svg-cli; \
+      export CHROME=$(ls -d /ms-playwright/chromium-*/chrome-linux*/chrome | head -1); \
+      python3 -m http.server -d /work 8123 >/dev/null 2>&1 & sleep 1; \
+      cd crates/html-to-svg-rs/tests/regressions; \
+      for d in ${0:-*/}; do d=${d%/}; page=$(ls $d/page.* | head -1); \
+        /cache/target/debug/html-to-svg capture "http://localhost:8123/crates/html-to-svg-rs/tests/regressions/$page" $d --size 320x240 --settle 0.5; \
+      done' "{{NAMES}}"

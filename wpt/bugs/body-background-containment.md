@@ -1,6 +1,7 @@
 ---
 title: The body's background is propagated to the canvas even when containment forbids it
 status: open
+regression-test: crates/html-to-svg-rs/tests/regressions.rs::body_background_containment
 ---
 CSS propagates the body's background to the canvas only when neither `<html>` nor `<body>` has
 paint, layout or size containment (`contain: paint`, `layout`, `size`, `content`, `strict`).

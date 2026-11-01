@@ -1,6 +1,7 @@
 ---
 title: XHTML documents lose their images, canvases and page background
 status: open
+regression-test: crates/html-to-svg-rs/tests/regressions.rs::xhtml_canvas
 ---
 In an XHTML document (`.xht`, `.xhtml`) Chrome reports tag names in lower case (`img`, `html`,
 `body`); in an HTML document in upper case. The lowering only knows the upper-case names:

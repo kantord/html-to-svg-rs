@@ -1,0 +1,11 @@
+<!doctype html>
+<!-- Bug background-clip-not-forwarded: with `background-clip: text` the gradient shows only
+     through the glyphs. Pacifico is OFL (FONT-LICENSE); its capture is in fonts/. -->
+<title>background-clip-text</title>
+<style>
+  @font-face { font-family: "Pacifico"; src: url("/packages/test-fixtures/node_modules/@fontsource/pacifico/files/pacifico-latin-400-normal.woff2") format("woff2"); }
+  body { margin: 20px; }
+  p { margin: 0; font: 64px/1.2 "Pacifico"; color: transparent;
+      background: linear-gradient(90deg, #dc2626, #2563eb); -webkit-background-clip: text; background-clip: text; }
+</style>
+<p>Clip</p>

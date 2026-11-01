@@ -1,0 +1,7 @@
+<!doctype html>
+<!-- Bug body-background-containment: with `contain: paint` on the body, its background must not
+     be propagated to the canvas: it paints only the body's own box. -->
+<title>body-background-containment</title>
+<style>
+  body { contain: paint; background: #16a34a; margin: 30px; height: 80px; }
+</style>

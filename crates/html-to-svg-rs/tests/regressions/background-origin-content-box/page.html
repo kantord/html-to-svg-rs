@@ -1,0 +1,11 @@
+<!doctype html>
+<!-- Bug background-origin-not-forwarded: the background image must be positioned from the
+     content box, not the padding box. -->
+<title>background-origin-content-box</title>
+<style>
+  body { margin: 20px; }
+  div { width: 160px; height: 100px; padding: 30px; border: 10px solid #334155;
+        background: linear-gradient(#16a34a, #16a34a) no-repeat 0 0 / 60px 40px #e2e8f0;
+        background-origin: content-box; }
+</style>
+<div></div>
