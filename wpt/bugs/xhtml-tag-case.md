@@ -1,6 +1,6 @@
 ---
 title: XHTML documents lose their images, canvases and page background
-status: open
+status: fixed
 regression-test: crates/html-to-svg-rs/tests/regressions.rs::xhtml_canvas
 ---
 In an XHTML document (`.xht`, `.xhtml`) Chrome reports tag names in lower case (`img`, `html`,
@@ -20,3 +20,7 @@ Also affected, but they fail for another reason too and are left untriaged: `bor
 
 Fix: compare tag names case-insensitively (or upper-case them when the snapshot is decoded,
 `snapshot.rs`).
+
+**Fixed:** `snapshot.rs` upper-cases tag names when the snapshot is decoded. Side effect: inline
+`<svg>` in HTML documents (also reported in lower case, as a foreign element) now matches `SVG` in
+`RASTER_TAGS` and is cropped from Chrome's screenshot, as that list intended.

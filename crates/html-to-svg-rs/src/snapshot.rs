@@ -20,6 +20,12 @@ pub const STYLES: &[&str] = &[
     "background-size",
     "background-position",
     "background-repeat",
+    "background-clip",
+    "background-origin",
+    "padding-top",
+    "padding-right",
+    "padding-bottom",
+    "padding-left",
     "border-top-width",
     "border-right-width",
     "border-bottom-width",
@@ -36,6 +42,10 @@ pub const STYLES: &[&str] = &[
     "border-top-right-radius",
     "border-bottom-right-radius",
     "border-bottom-left-radius",
+    "corner-top-left-shape",
+    "corner-top-right-shape",
+    "corner-bottom-right-shape",
+    "corner-bottom-left-shape",
     "box-shadow",
     "overflow-x",
     "overflow-y",
@@ -46,6 +56,7 @@ pub const STYLES: &[&str] = &[
     "clip-path",
     "clip",
     "position",
+    "contain",
     "mask-image",
     "mask-size",
     "mask-position",
@@ -167,7 +178,7 @@ pub struct Fragment {
 #[derive(Debug, Clone)]
 pub enum Kind {
     Element {
-        /// Upper-case tag name, as the DOM reports it.
+        /// Upper-case tag name (Chrome reports lower case for XHTML and foreign elements).
         tag: String,
         children: Vec<Element>,
     },
@@ -283,7 +294,8 @@ impl Page {
                 Kind::Text { fragments }
             } else {
                 Kind::Element {
-                    tag: s(n.node_name[dom]).to_owned(),
+                    // XHTML documents (and foreign elements like `svg` in HTML) report lower case.
+                    tag: s(n.node_name[dom]).to_ascii_uppercase(),
                     children: Vec::new(),
                 }
             };

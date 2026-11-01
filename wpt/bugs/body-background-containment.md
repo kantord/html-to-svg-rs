@@ -1,6 +1,6 @@
 ---
 title: The body's background is propagated to the canvas even when containment forbids it
-status: open
+status: fixed
 regression-test: crates/html-to-svg-rs/tests/regressions.rs::body_background_containment
 ---
 CSS propagates the body's background to the canvas only when neither `<html>` nor `<body>` has
@@ -11,3 +11,5 @@ capture does not ask Chrome for `contain` (`STYLES` in `snapshot.rs`), so it can
 Evidence: `background-color-body-propagation-008.html` (`html { contain: paint }`) and `-009`
 (`body { contain: paint }`): Chrome paints green only behind the body's line of text, our SVG
 paints the whole page green (464,000 pixels differ).
+
+**Fixed:** the capture asks for `contain`, and `canvas_background` does not propagate the body's background when `<html>` or `<body>` has `size`, `layout`, `paint`, `strict` or `content` containment.

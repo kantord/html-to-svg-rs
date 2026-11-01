@@ -30,6 +30,14 @@ const BOX_STYLES: &[&str] = &[
     "background-size",
     "background-position",
     "background-repeat",
+    "background-clip",
+    "background-origin",
+    // Padding changes no size (border-box) and no child's place (children are absolute, from the
+    // padding box): it only gives Takumi the content box, for background-origin/clip.
+    "padding-top",
+    "padding-right",
+    "padding-bottom",
+    "padding-left",
     "border-top-width",
     "border-right-width",
     "border-bottom-width",
@@ -46,6 +54,10 @@ const BOX_STYLES: &[&str] = &[
     "border-top-right-radius",
     "border-bottom-right-radius",
     "border-bottom-left-radius",
+    "corner-top-left-shape",
+    "corner-top-right-shape",
+    "corner-bottom-right-shape",
+    "corner-bottom-left-shape",
     "box-shadow",
     "opacity",
     "filter",
@@ -146,7 +158,7 @@ pub fn lower(page: &Page, options: Options<'_>) -> Lowered {
         report: Report::default(),
         background_on_canvas: None,
     };
-    let canvas = lowerer.canvas_background(&page.root);
+    let canvas = lowerer.canvas_background(&page.root, (vw as f64, vh as f64));
     let top = Parent {
         to_page: Affine::IDENTITY,
         origin: (0.0, 0.0),
@@ -156,14 +168,7 @@ pub fn lower(page: &Page, options: Options<'_>) -> Lowered {
     let html = lowerer.element(&page.root, &top);
     // The canvas background covers the whole viewport even when the document is shorter, as a
     // layer of its own under the document's boxes.
-    let canvas = Node::container([]).with_style(lowerer.style(&[
-        ("position", "absolute".into()),
-        ("left", "0".into()),
-        ("top", "0".into()),
-        ("width", px(vw as f64)),
-        ("height", px(vh as f64)),
-        ("background-color", canvas),
-    ]));
+    let canvas = Node::container([]).with_style(lowerer.style(&canvas));
     let style = lowerer.style(&[
         ("position", "relative".into()),
         ("width", px(vw as f64)),
@@ -179,27 +184,125 @@ pub fn lower(page: &Page, options: Options<'_>) -> Lowered {
 }
 
 impl Lowerer<'_> {
-    /// CSS paints the root's background, or else the body's, over the whole canvas, and the
-    /// body then does not paint it again on its own box.
-    fn canvas_background(&mut self, root: &Element) -> String {
+    /// The canvas layer: CSS paints the root's background, or else the body's, over the whole
+    /// canvas, and that element then does not paint it again on its own box. Images are
+    /// positioned against the root element's box (its `background-origin` box) but tile over the
+    /// whole canvas: the layer is at least the viewport, its content box is that positioning
+    /// area (`background-origin: content-box` with padding up to it), and it paints its border
+    /// box (`background-clip: border-box`).
+    fn canvas_background(
+        &mut self,
+        root: &Element,
+        (vw, vh): (f64, f64),
+    ) -> Vec<(&'static str, String)> {
+        let white = vec![
+            ("position", "absolute".into()),
+            ("left", "0".into()),
+            ("top", "0".into()),
+            ("width", px(vw)),
+            ("height", px(vh)),
+            ("background-color", "white".into()),
+        ];
         // The snapshot's root box is the document's; `<html>` is its child.
         let Some(html) = (root.tag() == "HTML")
             .then_some(root)
             .or_else(|| child_tagged(root, "HTML"))
         else {
-            return "white".to_owned();
+            return white;
         };
-        if !is_transparent(html.style("background-color")) {
-            self.background_on_canvas = Some(html.dom_index);
-            return html.style("background-color").to_owned();
-        }
-        match child_tagged(html, "BODY") {
-            Some(body) if !is_transparent(body.style("background-color")) => {
-                self.background_on_canvas = Some(body.dom_index);
-                body.style("background-color").to_owned()
+        let source = if has_background(html) {
+            html
+        } else {
+            match child_tagged(html, "BODY") {
+                // The body's background is not propagated when either has paint, layout or size
+                // containment (CSS Containment, "Paint containment"; WPT background-color-body-
+                // propagation-008/009).
+                Some(body) if contains(html) || contains(body) => return white,
+                Some(body) if has_background(body) => body,
+                _ => return white,
             }
-            _ => "white".to_owned(),
+        };
+        self.background_on_canvas = Some(source.dom_index);
+
+        // The positioning area: the root element's box, as its `background-origin` (the used
+        // value of the propagated element's, first layer) says.
+        let side = |el: &Element, prop: &str, s: &str| {
+            parse_px(el.style(&format!("{prop}-{s}"))).unwrap_or(0.0)
+        };
+        let inset = |s: &str| match source
+            .style("background-origin")
+            .split(',')
+            .next()
+            .map(str::trim)
+        {
+            Some("border-box") => 0.0,
+            Some("content-box") => {
+                side(html, "border", &format!("{s}-width")) + side(html, "padding", s)
+            }
+            _ => side(html, "border", &format!("{s}-width")),
+        };
+        let b = html.bounds;
+        let (left, top) = (
+            (b.x + inset("left")).max(0.0),
+            (b.y + inset("top")).max(0.0),
+        );
+        let (right, bottom) = (b.x + b.w - inset("right"), b.y + b.h - inset("bottom"));
+        let (width, height) = (vw.max(right), vh.max(bottom));
+
+        let color = source.style("background-color");
+        let mut decls = vec![
+            ("position", "absolute".into()),
+            ("box-sizing", "border-box".into()),
+            ("left", "0".into()),
+            ("top", "0".into()),
+            ("width", px(width)),
+            ("height", px(height)),
+            ("padding-left", px(left)),
+            ("padding-top", px(top)),
+            ("padding-right", px((width - right).max(0.0))),
+            ("padding-bottom", px((height - bottom).max(0.0))),
+            // Under a transparent root the canvas is the viewer's white.
+            (
+                "background-color",
+                if is_transparent(color) {
+                    "white".into()
+                } else {
+                    color.to_owned()
+                },
+            ),
+        ];
+        let image = source.style("background-image");
+        if !image.is_empty() && image != "none" {
+            match inline_urls(image, self.options.images) {
+                Some(image) => {
+                    let layers = layer_count(&image);
+                    decls.extend([
+                        ("background-image", image),
+                        (
+                            "background-size",
+                            source.style("background-size").to_owned(),
+                        ),
+                        (
+                            "background-position",
+                            source.style("background-position").to_owned(),
+                        ),
+                        (
+                            "background-repeat",
+                            source.style("background-repeat").to_owned(),
+                        ),
+                        ("background-origin", vec!["content-box"; layers].join(", ")),
+                        ("background-clip", vec!["border-box"; layers].join(", ")),
+                    ]);
+                }
+                None => self.report.warnings.push(format!(
+                    "<{}> #{}: canvas background-image url() was not captured",
+                    source.tag(),
+                    source.dom_index
+                )),
+            }
         }
+        decls.retain(|(_, v)| !v.is_empty());
+        decls
     }
 
     fn element(&mut self, el: &Element, parent: &Parent) -> Option<Node> {
@@ -557,6 +660,35 @@ fn with_id(node: Node, id: Option<String>) -> Node {
         Some(id) => node.with_id(id),
         None => node,
     }
+}
+
+/// How many layers a computed `background-image` has: its commas outside parentheses, plus one.
+fn layer_count(value: &str) -> usize {
+    let mut depth = 0i32;
+    1 + value
+        .chars()
+        .filter(|&c| {
+            match c {
+                '(' => depth += 1,
+                ')' => depth -= 1,
+                _ => {}
+            }
+            c == ',' && depth == 0
+        })
+        .count()
+}
+
+/// Whether an element has a background to propagate to the canvas: a colour or an image.
+fn has_background(el: &Element) -> bool {
+    !is_transparent(el.style("background-color"))
+        || !matches!(el.style("background-image"), "" | "none")
+}
+
+/// Whether an element has the containment that stops the body's background from propagating.
+fn contains(el: &Element) -> bool {
+    el.style("contain")
+        .split_whitespace()
+        .any(|v| matches!(v, "size" | "layout" | "paint" | "strict" | "content"))
 }
 
 fn is_transparent(color: &str) -> bool {
