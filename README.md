@@ -43,6 +43,23 @@ fontconfig on every run, so a changed score means changed code. Inside it, a tes
 missing font fails instead of skipping. `just test-shell` opens a shell with the same mounts. The
 first run builds the image and compiles everything (several minutes); caches live on podman volumes.
 
+## CI and dependencies
+
+- `.github/workflows/ci.yml`, on every push to main and pull request: Rust (fmt, clippy with
+  warnings as errors, all tests, the end-to-end test required to find its fonts), `cargo deny
+  check` (`deny.toml`: vulnerabilities and unmaintained crates, licences, crate sources), Node
+  (`pnpm audit`, typecheck, the npm package's and the Playwright tests) and zizmor (the workflows'
+  own security).
+- `.github/workflows/npm.yml`: the npm package's native builds per platform, published on a `v*`
+  tag. It uses no cache, so nothing a pull request could write reaches a published binary.
+- Every action is pinned by commit, every job has only the permissions it needs, and checkouts
+  keep no token.
+- `renovate.json` keeps dependencies current: updates wait 3 days after release (security fixes do
+  not); Cargo dependencies are pinned to exact versions; takumi (and the patched takumi-svg in
+  `vendor/`) moves only on approval, by hand; Playwright, napi-rs and the Rust toolchain each move
+  as one group. Tool versions shared by the npm packages live once, in the pnpm catalog
+  (`pnpm-workspace.yaml`).
+
 ## Run it
 
 ```bash

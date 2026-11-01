@@ -128,11 +128,11 @@ fn to_sfnt(bytes: Vec<u8>) -> Option<Vec<u8>> {
 }
 
 fn postscript_name(sfnt: &[u8], index: u32) -> Option<String> {
-    let face = ttf_parser::Face::parse(sfnt, index).ok()?;
-    face.names()
-        .into_iter()
-        .filter(|n| n.name_id == ttf_parser::name_id::POST_SCRIPT_NAME)
-        .find_map(|n| n.to_string())
+    use skrifa::MetadataProvider;
+    let font = skrifa::FontRef::from_index(sfnt, index).ok()?;
+    font.localized_strings(skrifa::string::StringId::POSTSCRIPT_NAME)
+        .english_or_first()
+        .map(|name| name.to_string())
 }
 
 /// PostScript name -> (file, face index) of every installed font, from fontconfig.

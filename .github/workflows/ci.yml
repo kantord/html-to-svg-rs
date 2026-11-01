@@ -1,0 +1,123 @@
+# Every check of the repository, on each push to main and each pull request:
+#
+#   rust      fmt, clippy (warnings are errors), every Rust test
+#   deny      cargo-deny: vulnerabilities and unmaintained crates, licences, crate sources
+#   node      pnpm audit, typecheck, the npm package's tests, the Playwright tests
+#   zizmor    the workflows themselves, for injection, credential and pinning mistakes
+#
+# The npm package's native builds per platform are .github/workflows/npm.yml.
+#
+# Hardening (checked by zizmor): no permissions but `contents: read`, checkouts do not keep the
+# token, actions are pinned by commit, and no `${{ }}` expression is written into a shell script.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust (fmt, clippy, tests)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The toolchain and components rust-toolchain.toml pins.
+      - run: rustup toolchain install
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-rust-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
+      # The fonts the end-to-end fixture was captured with; HTML_TO_SVG_TEST_ENV=container makes
+      # a missing one a failure instead of a skipped test.
+      - name: Fonts
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core fonts-inter
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+        env:
+          HTML_TO_SVG_TEST_ENV: container
+
+  deny:
+    name: cargo-deny (advisories, licences, sources)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@718993db25d12d67fe704d6aa97369e03d3803c8 # cargo-deny
+      - run: cargo deny check
+
+  node:
+    name: Node (audit, types, tests)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-node-${{ hashFiles('rust-toolchain.toml', '**/Cargo.lock') }}
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Audit npm dependencies
+        run: pnpm audit --audit-level high
+      - name: Build the native addon (debug) and the Playwright package
+        run: |
+          pnpm --filter html-to-svg-rs build:debug
+          pnpm --filter playwright-html-to-svg-rs build
+      - run: pnpm -r typecheck
+      - name: Browsers and fonts for the Playwright tests
+        working-directory: packages/playwright-html-to-svg-rs
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core fonts-inter
+          pnpm exec playwright install --with-deps chromium chrome
+      - name: Tests (npm package, Playwright)
+        run: pnpm -r test
+        env:
+          CI: "true"
+
+  zizmor:
+    name: zizmor (workflow security)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        with:
+          # Report in the log and fail the job; no SARIF upload (that would need
+          # security-events: write).
+          advanced-security: false

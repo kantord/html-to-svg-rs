@@ -1,0 +1,49 @@
+# cargo-deny: what the dependency tree may contain. Run by CI (.github/workflows/ci.yml) and by
+# `cargo deny check` locally. Based on the enwiro/tauler policy.
+
+[graph]
+all-features = false
+no-default-features = false
+
+[advisories]
+# Unmaintained crates and vulnerabilities fail the check. An exception goes here with its id and
+# the reason it cannot be fixed yet; there is none.
+ignore = []
+
+[licenses]
+# The licences the tree has, each permissive. A new one fails the check until added here.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "0BSD",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    # jpeg-encoder (via takumi): `(MIT OR Apache-2.0) AND IJG`. Permissive; a binary that ships
+    # it (the npm package's addon) has to say it is based in part on the work of the Independent
+    # JPEG Group: see NOTICE.
+    "IJG",
+    "ISC",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.8
+
+[licenses.private]
+ignore = false
+
+[bans]
+# Duplicate versions (a few image and font crates, which takumi and resvg pull in at different
+# versions) are reported, not fatal: cargo builds them apart.
+multiple-versions = "warn"
+wildcards = "allow"
+allow-workspace = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

@@ -9,3 +9,6 @@ see vendor/README.md and the licence files in vendor/takumi-svg/.
 
 The test fixture crates/html-to-svg-rs/tests/regressions/background-clip-text/ includes the
 Pacifico font (SIL Open Font License 1.1, FONT-LICENSE next to it).
+
+The native addon of the npm package html-to-svg-rs includes jpeg-encoder, which is based in
+part on the work of the Independent JPEG Group (IJG licence).

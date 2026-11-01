@@ -14,4 +14,4 @@ html-to-svg-rs = { path = "../html-to-svg-rs" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 anyhow = "1"
 serde_json = "1"
-resvg = "0.45"
+resvg = "0.49"

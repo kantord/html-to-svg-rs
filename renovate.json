@@ -1,0 +1,74 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices", "helpers:pinGitHubActionDigestsToSemver"],
+  "minimumReleaseAge": "3 days",
+  "vulnerabilityAlerts": {
+    "minimumReleaseAge": null
+  },
+  "lockFileMaintenance": {
+    "enabled": false
+  },
+  "customManagers": [
+    {
+      "description": "The Rust toolchain is pinned in rust-toolchain.toml (and read from there by CI and the test container); no built-in manager reads its channel.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^rust-toolchain\\.toml$/"],
+      "matchStrings": ["channel = \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""],
+      "depNameTemplate": "rust",
+      "packageNameTemplate": "rust-lang/rust",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "description": "container/Containerfile installs Chrome with the Playwright CLI at the version of its base image and of @playwright/test; the Dockerfile manager reads the FROM line but not this.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^container/Containerfile$/"],
+      "matchStrings": ["npx -y playwright@(?<currentValue>\\S+) install"],
+      "depNameTemplate": "playwright",
+      "datasourceTemplate": "npm"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Digest, pin and pinDigest updates carry no release timestamp (a digest bump of a tag-tracking ref, a range rewritten to the version already in use), so the age gate would hold them forever. Same rule as tauler and pirate-game.",
+      "matchUpdateTypes": ["digest", "pin", "pinDigest"],
+      "minimumReleaseAge": null
+    },
+    {
+      "description": "Patch updates are low-review-effort; land them as one PR.",
+      "matchUpdateTypes": ["patch"],
+      "groupName": "patch updates"
+    },
+    {
+      "description": "Pinned, not bumped (tauler, PR #597): under `bump` the manifest gets a caret range, and `cargo update` resolves past the version Renovate picked once the age gate holds a newer release back. `=x.y.z` leaves cargo no room. Lockfile maintenance is off (top of file) for the same reason: a whole-lockfile refresh has no release timestamp to age. Transitive security fixes come from `cargo deny check` in ci.yml.",
+      "matchManagers": ["cargo"],
+      "rangeStrategy": "pin"
+    },
+    {
+      "description": "Action digest bumps are independent and noisy; one PR is enough.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions"
+    },
+    {
+      "description": "takumi re-exports takumi-core types, and this repository builds a patched copy of takumi-svg (vendor/takumi-svg, `[patch.crates-io]`). A takumi bump that needs a newer takumi-svg leaves the patch unused, and the SVG silently loses its data-* annotations (the end-to-end and Playwright tests catch it). So these move together, by hand: copy the new takumi-svg over vendor/, apply vendor/takumi-svg-annotations.patch, then merge (vendor/README.md). The PR opens only when approved on the Dependency Dashboard.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["/^takumi/"],
+      "groupName": "takumi crates",
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "The napi-rs CLI generates the binding (index.js, index.d.ts) the napi crates are built for; they move together.",
+      "matchPackageNames": ["@napi-rs/cli", "napi", "napi-derive", "napi-build"],
+      "groupName": "napi-rs"
+    },
+    {
+      "description": "One Playwright version in four places: @playwright/test (the pnpm catalog), the test container's base image, its `playwright install chrome`, and the browsers the tests download. A lone bump makes the installed browsers and the library disagree.",
+      "matchPackageNames": ["@playwright/test", "playwright", "mcr.microsoft.com/playwright"],
+      "groupName": "playwright"
+    },
+    {
+      "description": "The Rust toolchain moves on its own PR: a new compiler can bring new clippy lints, which CI denies.",
+      "matchDepNames": ["rust"],
+      "groupName": "rust toolchain"
+    }
+  ]
+}
