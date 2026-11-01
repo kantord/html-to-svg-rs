@@ -2,6 +2,7 @@
 //
 //   node src/main.ts run [--binary B] [--jobs N] [--keep-passing] [path-prefix...]
 //   node src/main.ts check
+//   node src/main.ts report
 //
 // `run` expects the pinned checkout served at http://web-platform.test:8000/ (wpt/serve.sh, in
 // the test container: `just wpt`). For each reftest and each of its references it opens the page
@@ -13,6 +14,7 @@
 // out/wpt/refs/), ready to become a Rust regression test.
 //
 // `check` only verifies that every `regression-test` entry links to an existing Rust test.
+// `report` writes out/wpt/report.html from the captures a run left (see report.ts).
 
 import { execFile } from "node:child_process";
 import { mkdir, readFile, rm } from "node:fs/promises";
@@ -25,6 +27,7 @@ import { capture, convert, ResourceRecorder, styles } from "playwright-html-to-s
 
 import { difference, passes, type Difference } from "./compare.ts";
 import { readReftests, type Reftest } from "./manifest.ts";
+import { writeReport } from "./report.ts";
 import { type Change, danglingLinks, load, type Outcome, record, save } from "./results.ts";
 
 const REPO = new URL("../../../", import.meta.url).pathname;
@@ -261,12 +264,16 @@ async function runTests(args: Args): Promise<number> {
 async function main(): Promise<number> {
   const args = parseArgs(process.argv.slice(2));
   if (args.command === "run") return runTests(args);
+  if (args.command === "report") {
+    console.log(`report: ${await writeReport(REPO, OUT, WPT_CHROME_ARGS)}`);
+    return 0;
+  }
   if (args.command === "check") {
     const dangling = await danglingLinks(REPO, await load(RESULTS));
     for (const d of dangling) console.log(`regression-test link to nothing: ${d}`);
     return dangling.length ? 1 : 0;
   }
-  console.error("usage: main.ts run [--binary B] [--jobs N] [--keep-passing] [prefix...] | check");
+  console.error("usage: main.ts run [--binary B] [--jobs N] [--keep-passing] [prefix...] | check | report");
   return 2;
 }
 

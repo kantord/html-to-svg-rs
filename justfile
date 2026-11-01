@@ -24,3 +24,9 @@ test-shell: image
 # test that passed now fails. See wpt/README.md.
 wpt *ARGS: image
     {{run}} bash -c 'pnpm install --frozen-lockfile && cargo build --release -p html-to-svg-cli && pnpm --filter playwright-html-to-svg-rs build && wpt/serve.sh && node packages/wpt-runner/src/main.ts run --binary /cache/target/release/html-to-svg {{ARGS}}'
+
+# out/wpt/report.html from the captures the last `just wpt` left: for each test that did not pass,
+# Chrome's screenshot, our SVG drawn by Chrome, and where they differ. Then opens it.
+wpt-report: image
+    {{run}} bash -c 'pnpm install --frozen-lockfile && wpt/serve.sh >/dev/null && node packages/wpt-runner/src/main.ts report'
+    -@xdg-open out/wpt/report.html >/dev/null 2>&1 || echo "open out/wpt/report.html"
