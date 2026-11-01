@@ -1,41 +1,62 @@
-// wpt/results.jsonl: one line per test, sorted by test. The runner writes `pass`, `chrome-fails`
-// and `error`, and `todo` for a failure it has not seen before; `todo`, `not-planned` and
-// `regression-test` are decisions a person makes and the runner never undoes.
+// wpt/results.jsonl: one line per test, sorted by test. The runner sets `pass`, `fail`,
+// `chrome-fails` and `error`; `bug` and `not-planned` are a person's triage, which the runner
+// never undoes while the test fails: it still runs those tests, keeps their score current, and
+// reports when one passes.
 
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export type Status =
-  /** Chrome passes it, and so does our SVG. */
+  /** Chrome passes WPT's assertion, and our SVG matches Chrome's picture of the page. */
   | "pass"
-  /** Our SVG fails where Chrome passes: to be worked on. */
-  | "todo"
-  /** Our SVG fails, and fixing it is not planned (`note` says why). */
+  /** Chrome passes, our SVG does not match, and nobody has looked at it yet. */
+  | "fail"
+  /** Fails because of a tracked bug: `bug` names its file, wpt/bugs/<bug>.md. */
+  | "bug"
+  /** Fails, and fixing it is not planned: `note` says why. */
   | "not-planned"
-  /** Our SVG fails, and a Rust test holds the case (`link`). */
-  | "regression-test"
-  /** Chrome itself fails it: says nothing about the conversion. */
+  /** Chrome fails WPT's own assertion (test against reference): says nothing about us. */
   | "chrome-fails"
   /** The test could not be run (timeout, conversion error): `note` has the message. */
   | "error";
+
+/** A run: this repository's version, the date, the Chrome version, the WPT commit. */
+export interface Run {
+  version: string;
+  date: string;
+  chrome: string;
+  wpt: string;
+}
+
+/** How far our SVG is from Chrome's picture (see `fidelity` in compare.ts), in pixels. */
+export interface Score {
+  /** Misplaced outside text boxes: decides the verdict with `text`. */
+  outside: number;
+  /** Misplaced inside text boxes. */
+  text: number;
+  /** Not exactly equal outside text boxes: for information (faint shading differences). */
+  exact: number;
+}
 
 export interface Entry {
   /** The test's URL path. */
   test: string;
   status: Status;
-  /** When it last passed: this repository's version, the date, the WPT commit. */
-  lastPass?: { version: string; date: string; wpt: string };
-  /** Why: for not-planned, todo and error. */
+  /** The latest measurement (not for chrome-fails and error). */
+  score?: Score;
+  /** The run that last saw it pass. Kept when it starts failing: a `fail` with it regressed. */
+  lastPass?: Run;
+  /** For chrome-fails: the run that saw Chrome fail it. */
+  chromeFailed?: Run;
+  /** For bug: the bug's id, the name of its file in wpt/bugs/ without `.md`. */
+  bug?: string;
+  /** For not-planned: why; for error: the message. */
   note?: string;
-  /** For regression-test: `<file>::<test name>`, the Rust test holding the case. */
-  link?: string;
-  /** For chrome-fails: the Chrome version that failed it. */
-  chrome?: string;
 }
 
-/** Statuses a person sets; a new failure never replaces them. */
-const DECIDED: Status[] = ["todo", "not-planned", "regression-test"];
+/** Statuses a person sets: the runner keeps them while the test fails. */
+const TRIAGED: Status[] = ["bug", "not-planned"];
 
 export async function load(path: string): Promise<Map<string, Entry>> {
   const text = existsSync(path) ? await readFile(path, "utf8") : "";
@@ -54,59 +75,58 @@ export async function save(path: string, entries: Map<string, Entry>): Promise<v
 }
 
 export type Outcome =
-  | { kind: "pass" }
-  | { kind: "fail" }
-  | { kind: "chrome-fails"; chrome: string }
+  | { kind: "pass"; score: Score }
+  | { kind: "fail"; score: Score }
+  | { kind: "chrome-fails" }
   | { kind: "error"; message: string };
 
 export interface Change {
   test: string;
-  /** `regressed`: passed before, fails now. `fixed`: did not pass before, passes now. */
-  kind: "regressed" | "fixed" | "new-failure";
+  /**
+   * `regressed`: passed before, fails now (fails the run). `fixed`: a test that did not pass
+   * passes now. `new-failure`: fails, never passed, not triaged: to be triaged. `worse`: still
+   * passes, but with more than `WORSE` misplaced pixels more than the last run measured.
+   */
+  kind: "regressed" | "fixed" | "new-failure" | "worse";
   before?: Status;
+  /** For a `fixed` test that was a `bug`: which. */
+  bug?: string;
 }
+
+/** How many more misplaced pixels than last time make a passing test `worse` (see Change). */
+const WORSE = 10;
 
 /** Records one run's outcome; returns what changed that a person should hear about. */
-export function record(
-  entries: Map<string, Entry>,
-  test: string,
-  outcome: Outcome,
-  run: { version: string; date: string; wpt: string },
-): Change | undefined {
+export function record(entries: Map<string, Entry>, test: string, outcome: Outcome, run: Run): Change | undefined {
   const before = entries.get(test);
-  const keep = { lastPass: before?.lastPass, note: before?.note, link: before?.link };
+  const triaged = !!before && TRIAGED.includes(before.status);
+  const lastPass = before?.lastPass;
   switch (outcome.kind) {
-    case "pass":
-      entries.set(test, { test, status: "pass", lastPass: run, link: keep.link });
-      return before && before.status !== "pass" && before.status !== "chrome-fails"
-        ? { test, kind: "fixed", before: before.status }
+    case "pass": {
+      entries.set(test, { test, status: "pass", score: outcome.score, lastPass: run });
+      if (before && before.status !== "pass" && before.status !== "chrome-fails") {
+        return { test, kind: "fixed", before: before.status, bug: before.bug };
+      }
+      const was = before?.score;
+      const now = outcome.score;
+      return was && now.outside + now.text > was.outside + was.text + WORSE
+        ? { test, kind: "worse", before: "pass" }
         : undefined;
+    }
     case "fail":
-      if (before && DECIDED.includes(before.status)) return undefined;
-      entries.set(test, { test, status: "todo", ...keep });
-      return before?.status === "pass"
-        ? { test, kind: "regressed", before: "pass" }
-        : { test, kind: "new-failure", before: before?.status };
+      if (triaged) {
+        entries.set(test, { ...before, score: outcome.score });
+        return undefined;
+      }
+      entries.set(test, { test, status: "fail", score: outcome.score, lastPass });
+      if (before?.status === "pass") return { test, kind: "regressed", before: "pass" };
+      return before?.status === "fail" ? undefined : { test, kind: "new-failure", before: before?.status };
     case "chrome-fails":
-      entries.set(test, { test, status: "chrome-fails", chrome: outcome.chrome, lastPass: keep.lastPass });
+      entries.set(test, { test, status: "chrome-fails", chromeFailed: run, lastPass });
       return undefined;
     case "error":
-      if (before && DECIDED.includes(before.status)) return undefined;
-      entries.set(test, { test, status: "error", note: outcome.message, lastPass: keep.lastPass });
+      if (triaged) return undefined;
+      entries.set(test, { test, status: "error", note: outcome.message, lastPass });
       return before?.status === "pass" ? { test, kind: "regressed", before: "pass" } : undefined;
   }
-}
-
-/** `regression-test` entries whose link names no file, or a file without that test name. */
-export async function danglingLinks(repo: string, entries: Map<string, Entry>): Promise<string[]> {
-  const dangling: string[] = [];
-  for (const e of entries.values()) {
-    if (e.status !== "regression-test") continue;
-    const [file, name] = (e.link ?? "").split("::");
-    const path = join(repo, file ?? "");
-    const ok =
-      !!file && !!name && existsSync(path) && (await readFile(path, "utf8")).includes(name);
-    if (!ok) dangling.push(`${e.test} -> ${e.link ?? "(no link)"}`);
-  }
-  return dangling;
 }

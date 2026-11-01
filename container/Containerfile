@@ -13,6 +13,9 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && fc-cache -f
 
+# The fonts setup the WPT runner's comparison Chrome uses (unhinted, greyscale glyphs).
+COPY container/fonts-nohint.conf /etc/html-to-svg/fonts-nohint.conf
+
 # Google Chrome, for the Playwright `chrome` project.
 RUN npx -y playwright@1.64.1 install chrome
 

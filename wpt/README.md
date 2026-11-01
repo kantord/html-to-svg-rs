@@ -6,8 +6,9 @@ test run of html-to-svg; none of WPT is kept in this repository. What is kept:
 | file | what it is |
 |---|---|
 | `commit` | the WPT commit every result is measured against |
-| `paths` | the folders of WPT fetched (sparse checkout): its server, and the areas tested |
-| `results.jsonl` | one line per test: its status, and when it last passed |
+| `areas` | the folders whose reftests are run |
+| `paths` | the other folders of WPT fetched: its server, and files the tests share |
+| `results.jsonl` | one line per test: its status, its latest score, when it last passed |
 | `serve.sh` | in the test container: fetches the pinned checkout and serves it |
 
 The runner is `packages/wpt-runner`.
@@ -15,62 +16,84 @@ The runner is `packages/wpt-runner`.
 ## Running
 
 ```bash
-just wpt                           # every reftest in the checkout (the areas in `paths`)
+just wpt                           # every reftest in wpt/areas
 just wpt css/css-borders           # one area, or any path prefix
+just wpt-report                    # out/wpt/report.html: what did not pass, with pictures
 ```
 
 It runs in the test container (`container/Containerfile`). The checkout lives on a podman volume
-(about 220 MB) and is fetched again only when `commit` or `paths` change.
+(about 260 MB) and is fetched again only when `commit`, `areas` or `paths` change. A full run of
+the two areas takes about two minutes.
 
-For each reftest and each reference, Chromium opens the page at 800x600, as WPT's harness does
-(after `load` and web fonts; a `reftest-wait` page is sent `TestRendered` and waited for). The page
-is captured and converted to SVG. Then the test is judged twice, with WPT's rules for multiple
-references and `fuzzy` allowances:
+## What a test checks
 
-1. **Chrome's screenshots**, test against reference. If Chrome fails, the test is `chrome-fails`:
-   it says nothing about the conversion.
-2. **Our SVGs**, test against reference, both drawn at 800x600. Chrome passed, so a failure here
-   is ours.
+WPT's own assertion (a test looks like its reference) is Chrome's to pass, not ours. Ours is that
+**our SVG of the page looks like Chrome's picture of the page**. Two Chromes:
 
-Captures of tests that do not pass stay in `out/wpt/<test path>/`, their references in
-`out/wpt/refs/<path>/` (`snapshot.json`,
-`chrome.png`, fonts, images, `out.svg`): the material for a Rust regression test.
+1. **The gate**, launched with WPT's own flags. It screenshots the test and its references, and
+   judges them by WPT's rules (several references, `fuzzy` allowances, `reftest-wait`). If Chrome
+   fails, the test is `chrome-fails`, with the run that saw it, and is not compared.
+2. **The comparison Chrome**, with unhinted greyscale glyphs (`container/fonts-nohint.conf`,
+   `--font-render-hinting=none --disable-lcd-text`). It captures the test page, the converter
+   turns that into SVG, and the same Chrome draws the SVG. The two pictures are compared by
+   **misplaced pixels**: a pixel counts when a channel differs by more than 32 and no pixel within
+   1 px of the other picture explains it. That is content missing, extra or in the wrong place,
+   and not:
+   - **edges anti-aliased differently**: Chrome draws a rounded rectangle, our SVG the same shape
+     as a path (measured up to about 30 pixels on WPT's border-radius tests);
+   - **glyph edges**: our SVG draws glyphs as outlines, Chrome draws them from the font, and their
+     edges always differ (about a third of the pixels inside text boxes, whatever Chrome's font
+     settings);
+   - **faint shading differences**: gradients, blur.
+
+   The `score` counts misplaced pixels outside and inside the text boxes Chrome reported apart,
+   and, for information, the pixels outside text that are not exactly equal (`exact`). A test
+   passes with at most 30 of each (`THRESHOLD` in `packages/wpt-runner/src/main.ts`): calibrated
+   on all 909 compared tests, where past 30 the number of passing tests barely moves (490 at 30,
+   506 at 100) and the rest differ by thousands of pixels. A passing test whose misplaced count
+   grows by more than 10 is listed as "got worse" without failing the run.
+
+Why not WPT's flags for the comparison too: they change text layout (measured on 20 pages: line
+widths 9 px from what the converter measures for the same font, against 0.1 px without them).
+
+A test that does not pass is tried once more on fresh browser contexts; a pass then counts, and
+the run lists it under "Passed on retry (flaky)". Captures of tests that do not pass stay in
+`out/wpt/<test path>/` (`snapshot.json`, `chrome.png`, fonts, images, `out.svg`, `svg.png`: our SVG
+drawn, `diff.png`): the material for a Rust regression test.
 
 ## Statuses
 
 | status | set by | meaning |
 |---|---|---|
-| `pass` | runner | Chrome passes, and so does our SVG |
-| `todo` | runner, for a new failure; or you | our SVG fails; to be worked on |
-| `not-planned` | you | our SVG fails; not going to be fixed (`note` says why) |
-| `regression-test` | you | our SVG fails; a Rust test holds the case (`link`) |
-| `chrome-fails` | runner | Chrome fails it too (`chrome` is the version) |
+| `pass` | runner | Chrome passes; our SVG matches Chrome's picture |
+| `fail` | runner | Chrome passes; our SVG does not match; not triaged yet |
+| `bug` | you | fails because of a tracked bug: `bug` names its file, `bugs/<bug>.md` |
+| `not-planned` | you | fails, and fixing it is not planned: `note` says why |
+| `chrome-fails` | runner | Chrome fails WPT's assertion (`chromeFailed`: version, date, WPT commit) |
 | `error` | runner | could not be run: timeout, conversion error (`note`) |
 
-`lastPass` records the version of this repository, the date and the WPT commit of the last run
-that passed. It stays when the test starts failing, so a `todo` with a `lastPass` is a
-regression.
+`lastPass` is the run that last saw the test pass: this repository's version, the date, Chrome's
+version and the WPT commit. It stays when the test starts failing, so a `fail` with a `lastPass` is
+a regression.
 
-The runner never replaces `todo`, `not-planned` or `regression-test` with another failing
-status. When such a test passes again it becomes `pass` (keeping its `link`), and the run lists
-it under "Now passing".
-
-**Triage** is editing the line: change `todo` to `not-planned` with a `note`, or write a
-regression test and set
+**Triage** is editing a `fail` line: to a tracked bug, when its root cause is known (one file per
+root cause in `bugs/`, see `bugs/README.md`), or to not planned:
 
 ```json
-{"test":"/css/...","status":"regression-test","link":"crates/html-to-svg-cli/tests/wpt.rs::border_radius_005"}
+{"test":"/css/...","status":"bug","bug":"xhtml-tag-case", ...}
+{"test":"/css/...","status":"not-planned","note":"vertical writing modes", ...}
 ```
 
-`link` is `<file>::<test name>`; every run (and `node packages/wpt-runner/src/main.ts check`)
-fails when a link points to no such file or name.
+The runner still runs triaged tests and keeps their `score` current, but never changes their
+status while they fail. When one passes it becomes `pass`, and the run lists it under "Now
+passing"; an open bug none of whose tests fail any more is listed, to be marked fixed. Each run
+prints every open bug with how many tests it makes fail.
 
-A test that does not pass is tried once more on a fresh browser context; when the second try
-passes, it counts as a pass and the run lists it under "Passed on retry (flaky)".
+**A run fails** (exit code 1) when a test that passed before fails now, a test names a bug with no
+file, a bug's regression test does not exist, or a bug marked fixed still has failing tests. `just
+test` runs the same consistency check. New failures are listed for triage but do not fail the run.
 
-**A run fails** (exit code 1) when a test that passed before fails now, or a link points nowhere.
+## Moving to a newer WPT or Chrome
 
-## Moving to a newer WPT
-
-Put the new commit in `commit` and run `just wpt`. Each entry's `lastPass.wpt` says which WPT a
-pass was measured against.
+Put the new commit in `commit` (or update the test image) and run `just wpt`. Each `lastPass` and
+`chromeFailed` says which WPT and Chrome it was measured with.
