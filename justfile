@@ -23,7 +23,7 @@ test-shell: image
 # runs one area (default: every reftest in the checkout, see wpt/paths). Exits non-zero when a
 # test that passed now fails. See wpt/README.md.
 wpt *ARGS: image
-    {{run}} bash -c 'pnpm install --frozen-lockfile && cargo build --release -p html-to-svg-cli && pnpm --filter playwright-html-to-svg-rs build && wpt/serve.sh && node packages/wpt-runner/src/main.ts run --binary /cache/target/release/html-to-svg {{ARGS}}'
+    {{run}} bash -c 'pnpm install --frozen-lockfile && pnpm --filter html-to-svg-rs build && pnpm --filter playwright-html-to-svg-rs build && wpt/serve.sh && UV_THREADPOOL_SIZE=16 node packages/wpt-runner/src/main.ts run {{ARGS}}'
 
 # out/wpt/report.html from the captures the last `just wpt` left: for each test that did not pass,
 # Chrome's screenshot, our SVG drawn by Chrome, and where they differ. Then opens it.
@@ -47,5 +47,5 @@ regression-capture *NAMES: image
 # shadcn/ui): SVG and PNG snapshots in out/live/<site>/, and out/live/index.html to look at them.
 # Needs the network; not part of `just test`. See packages/playwright-html-to-svg-rs/tests/live/.
 live-snapshots: image
-    {{run}} bash -c 'pnpm install --frozen-lockfile && cargo build -q -p html-to-svg-cli && pnpm --filter playwright-html-to-svg-rs build && cd packages/playwright-html-to-svg-rs && HTML_TO_SVG_LIVE=1 pnpm exec playwright test --project=live --reporter=list; status=$?; node tests/live/gallery.ts; exit $status'
+    {{run}} bash -c 'pnpm install --frozen-lockfile && pnpm --filter html-to-svg-rs build && pnpm --filter playwright-html-to-svg-rs build && cd packages/playwright-html-to-svg-rs && HTML_TO_SVG_LIVE=1 pnpm exec playwright test --project=live --reporter=list; status=$?; node tests/live/gallery.ts; exit $status'
     -@xdg-open out/live/index.html >/dev/null 2>&1 || echo "open out/live/index.html"

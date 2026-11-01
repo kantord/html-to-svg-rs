@@ -5,6 +5,13 @@ import { PNG } from "pngjs";
 
 import type { Fuzzy, Reftest } from "./manifest.ts";
 
+/** Byte `i` of pixel data; out of range is a bug in the caller, not a black pixel. */
+function at(data: Uint8Array, i: number): number {
+  const v = data[i];
+  if (v === undefined) throw new RangeError(`pixel byte ${i} of ${data.length}`);
+  return v;
+}
+
 export interface Difference {
   /** The largest difference of any channel of any pixel, 0..255. */
   maxDifference: number;
@@ -22,7 +29,7 @@ export function difference(a: Buffer, b: Buffer): Difference {
   let differingPixels = 0;
   for (let i = 0; i < pa.data.length; i += 4) {
     let d = 0;
-    for (let c = 0; c < 4; c++) d = Math.max(d, Math.abs(pa.data[i + c] - pb.data[i + c]));
+    for (let c = 0; c < 4; c++) d = Math.max(d, Math.abs(at(pa.data, i + c) - at(pb.data, i + c)));
     if (d > 0) {
       differingPixels++;
       maxDifference = Math.max(maxDifference, d);
@@ -118,9 +125,9 @@ export function fidelity(chromePng: Buffer, svgPng: Buffer, inText: Uint8Array):
   const sameSize = svg.width === width && svg.height === height;
   const channel = (a: PNG, i: number, b: PNG, j: number) =>
     Math.max(
-      Math.abs(a.data[i] - b.data[j]),
-      Math.abs(a.data[i + 1] - b.data[j + 1]),
-      Math.abs(a.data[i + 2] - b.data[j + 2]),
+      Math.abs(at(a.data, i) - at(b.data, j)),
+      Math.abs(at(a.data, i + 1) - at(b.data, j + 1)),
+      Math.abs(at(a.data, i + 2) - at(b.data, j + 2)),
     );
   // Whether pixel (x, y) of `a` matches some pixel of `b` within 1 px.
   const near = (a: PNG, b: PNG, x: number, y: number) => {
@@ -146,7 +153,7 @@ export function fidelity(chromePng: Buffer, svgPng: Buffer, inText: Uint8Array):
       const d = sameSize ? channel(chrome, i, svg, i) : 255;
       let rgb: [number, number, number];
       if (d === 0) {
-        const grey = Math.round((chrome.data[i] + chrome.data[i + 1] + chrome.data[i + 2]) / 9 + 170);
+        const grey = Math.round((at(chrome.data, i) + at(chrome.data, i + 1) + at(chrome.data, i + 2)) / 9 + 170);
         rgb = [grey, grey, grey];
       } else {
         const misplaced = !sameSize || (d > 32 && !near(chrome, svg, x, y) && !near(svg, chrome, x, y));

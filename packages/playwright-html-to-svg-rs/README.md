@@ -1,7 +1,28 @@
 # playwright-html-to-svg-rs
 
-SVG snapshots of the page under test, in Playwright: Chrome lays the page out, and the
-`html-to-svg` binary of this repository (`crates/html-to-svg-cli`) paints Chrome's boxes as SVG.
+SVG snapshots of pages in Playwright: Chrome lays the page out, and
+[`html-to-svg-rs`](../html-to-svg-rs) (a native Node.js addon, installed with this package)
+paints Chrome's boxes as SVG, in the same process.
+
+## Any page: `snapshot(page)`
+
+```ts
+import { chromium } from "playwright";
+import { snapshot } from "playwright-html-to-svg-rs";
+
+const browser = await chromium.launch();
+const page = await browser.newPage();
+await page.goto("https://example.com/");
+const { svg, png, report, fonts } = await snapshot(page);
+```
+
+No setup before `goto`: the fonts and images the page used are read from Chrome afterwards. The
+page is left as it was (its scroll position too). Options: `dir` keeps the capture (otherwise a
+temporary folder, removed); `assetsDir` writes images to a folder shared by many snapshots;
+`recorder` (a `ResourceRecorder` made before the page loaded) also knows images by the URLs of
+redirects they went through.
+
+## In tests: the `svgSnapshot` fixture
 
 ```ts
 import { expect, test } from "playwright-html-to-svg-rs";
@@ -14,10 +35,10 @@ test("dashboard", async ({ page, svgSnapshot }) => {
 ```
 
 `svgSnapshot(name, page?)` captures the current viewport, converts it, attaches `<name>.svg` to
-the test report and returns `{ svg, report, dir }`. `report` is what the conversion found:
-faces not found, warnings (e.g. an image that was not captured), elements cropped from Chrome's
-screenshot (`<img>`, `<canvas>`, form controls). (`dir` is the capture under the test's output
-directory: `snapshot.json`, `chrome.png`, `out.svg`, the fonts and images Chrome used).
+the test report and returns what `snapshot` does, plus `dir`: the capture under the test's output
+directory (`snapshot.json`, `chrome.png`, `out.svg`, the fonts and images Chrome used). `report`
+is what the conversion did not draw as Chrome did (`warnings`, `rasterFallbacks`: elements cropped
+from Chrome's screenshot, `dropped`), `fonts.missing` the faces it did not find.
 
 ## Shared assets
 
@@ -38,9 +59,6 @@ SVG attached to the test report then needs the folder next to it to show its ima
 ## Setup
 
 - **Chromium or Chrome only:** the capture reads Chrome's layout over CDP.
-- **The binary:** set `htmlToSvgBinary` in `use` (or `$HTML_TO_SVG_BIN`); the default is
-  `html-to-svg` on `PATH`. Build it with `cargo build --release -p html-to-svg-cli`. The package
-  does not ship the binary yet.
 - **Fonts:** system fonts are found with `fc-list` on the machine that runs the conversion, which
   is the one running the test. Web fonts and images are saved from the test's own responses, which
   are recorded for the whole browser context from its creation, so navigating in a `beforeEach`
@@ -49,7 +67,7 @@ SVG attached to the test report then needs the folder next to it to show its ima
 
 ## Tests
 
-`pnpm test` builds the debug binary and runs `tests/` on Chromium, Chromium at 2x and Chrome
+`pnpm test` builds the addon (debug) and runs `tests/` on Chromium, Chromium at 2x and Chrome
 (`just test` at the repository root runs them in the test container), against the pages of
 `packages/test-fixtures`, which Playwright builds and serves with Vite. They test the glue, not the
 converter's accuracy (that is the Rust tests' job): `data-*` attributes reach the SVG; the web

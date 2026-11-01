@@ -1,61 +1,64 @@
-// Playwright fixture: `svgSnapshot(name)` turns the page under test into an SVG.
+// html-to-svg for Playwright: `snapshot(page)` turns a page into an SVG, and the test fixture
+// `svgSnapshot(name)` does it for the page under test and attaches the SVG to the report.
 //
-// The capture runs in the test's own browser over CDP (Chromium and Chrome only); the conversion
-// runs the `html-to-svg` binary of this repository (`crates/html-to-svg-cli`) on the capture.
+// The capture runs in the page's own browser over CDP (Chromium and Chrome only); the conversion
+// runs in this Node process, in the native addon of the generic npm package `html-to-svg-rs`.
 
-import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
 
 import { test as base, type BrowserContext, type Page } from "@playwright/test";
+import { type Conversion, convert, styles } from "html-to-svg-rs";
 
 import { capture, ResourceRecorder } from "./capture.js";
 
 export { expect } from "@playwright/test";
+export { type Conversion, convert, styles } from "html-to-svg-rs";
 export { capture, ResourceRecorder } from "./capture.js";
 
-const run = promisify(execFile);
-
-/** What `html-to-svg convert --json` reports about one conversion. */
-export interface ConversionReport {
-  fonts: {
-    /** Faces Chrome used that were found and registered. */
-    faces: number;
-    /** Faces Chrome used that could not be found (the text falls back to another face). */
-    missing: string[];
-  };
-  report: {
-    boxes: number;
-    text_lines: number;
-    /** Elements whose pixels were cropped from Chrome's screenshot (`<img>`, `<canvas>`, ...). */
-    raster_fallbacks: string[];
-    /** CSS declarations the painter rejected, with how often each was dropped. */
-    dropped: Record<string, number>;
-    /** Things that were not drawn as Chrome drew them, e.g. an image that was not captured. */
-    warnings: string[];
-    /** |Chrome line width - SVG line width| per text line, in px, before and after fitting. */
-    line_width_error: number[];
-    line_width_error_fitted: number[];
-  };
-  /** Files under `htmlToSvgAssetsDir` the SVG links to (empty when the option is not set). */
-  assets: string[];
+export interface SnapshotOptions {
+  /**
+   * Keep the capture here: snapshot.json, chrome.png (the page as Chrome drew it), the fonts and
+   * images it used, and out.svg. Without it, the capture goes to a temporary folder that is
+   * removed afterwards.
+   */
+  dir?: string | undefined;
+  /** Write images to this folder, shared by many snapshots, instead of inlining them. */
+  assetsDir?: string | undefined;
+  /**
+   * The page's fonts and images as they were downloaded, recorded from before the page loaded
+   * (`new ResourceRecorder(context)`). Without it, they are read from what Chrome keeps for the
+   * page, which is the same except for images reached through a redirect.
+   */
+  recorder?: ResourceRecorder | undefined;
 }
 
-export interface SvgSnapshot {
-  /** The SVG. Elements with `data-*` attributes keep them on the groups they painted. */
-  svg: string;
-  /** What the conversion found, dropped and warned about. */
-  report: ConversionReport;
-  /** The capture directory: snapshot.json, chrome.png (the page as Chrome drew it), out.svg. */
-  dir: string;
+export interface SvgSnapshot extends Conversion {
+  /** Where the capture was kept (`dir`), if it was. */
+  dir?: string;
+}
+
+/**
+ * Turns the current viewport of `page` (Chromium or Chrome) into an SVG: Chrome's layout is
+ * captured, then converted. Scroll position, cookies and the page itself are left as they were.
+ *
+ *     const { svg } = await snapshot(page);
+ */
+export async function snapshot(page: Page, options: SnapshotOptions = {}): Promise<SvgSnapshot> {
+  const dir = options.dir ?? (await mkdtemp(join(tmpdir(), "html-to-svg-")));
+  try {
+    await capture(page, dir, styles(), options.recorder);
+    const conversion = await convert(dir, options.assetsDir === undefined ? {} : { assetsDir: options.assetsDir });
+    if (!options.dir) return conversion;
+    await writeFile(join(dir, "out.svg"), conversion.svg);
+    return { ...conversion, dir };
+  } finally {
+    if (!options.dir) await rm(dir, { recursive: true, force: true });
+  }
 }
 
 export interface HtmlToSvgOptions {
-  /**
-   * Path of the `html-to-svg` binary. Defaults to `$HTML_TO_SVG_BIN`, else `html-to-svg` on PATH.
-   */
-  htmlToSvgBinary: string;
   /**
    * A folder shared by all snapshots: images are written there once, named by content hash
    * (`<sha256>.<ext>`), and the SVGs link to them by relative path instead of inlining them.
@@ -69,33 +72,7 @@ export interface HtmlToSvgFixtures {
    * Captures the page's current viewport and converts it to SVG. Saves the capture under the
    * test's output directory and attaches the SVG to the test report as `<name>.svg`.
    */
-  svgSnapshot: (name: string, page?: Page) => Promise<SvgSnapshot>;
-}
-
-/** Converts a capture directory with the binary; with `assetsDir`, images go there. */
-export async function convert(
-  binary: string,
-  dir: string,
-  assetsDir?: string,
-): Promise<{ svg: string; report: ConversionReport }> {
-  const assets = assetsDir ? ["--assets", assetsDir] : [];
-  const { stdout } = await run(binary, ["convert", dir, "--json", ...assets], {
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  const report = JSON.parse(stdout) as ConversionReport;
-  return { svg: await readFile(join(dir, "out.svg"), "utf8"), report };
-}
-
-const stylesByBinary = new Map<string, Promise<string[]>>();
-
-/** The computed styles a capture asks Chrome for, as the binary's conversion expects them. */
-export function styles(binary: string): Promise<string[]> {
-  let found = stylesByBinary.get(binary);
-  if (!found) {
-    found = run(binary, ["styles"]).then(({ stdout }) => JSON.parse(stdout) as string[]);
-    stylesByBinary.set(binary, found);
-  }
-  return found;
+  svgSnapshot: (name: string, page?: Page) => Promise<SvgSnapshot & { dir: string }>;
 }
 
 /** One recorder per browser context, started with the context (see the `context` fixture). */
@@ -111,7 +88,6 @@ function recorderFor(context: BrowserContext): ResourceRecorder {
 }
 
 export const test = base.extend<HtmlToSvgFixtures & HtmlToSvgOptions>({
-  htmlToSvgBinary: [process.env.HTML_TO_SVG_BIN ?? "html-to-svg", { option: true }],
   htmlToSvgAssetsDir: [undefined, { option: true }],
 
   // Font and image responses are recorded from the moment the context exists, before any hook
@@ -123,17 +99,19 @@ export const test = base.extend<HtmlToSvgFixtures & HtmlToSvgOptions>({
     recorder.stop();
   },
 
-  svgSnapshot: async ({ page, htmlToSvgBinary, htmlToSvgAssetsDir }, use, testInfo) => {
+  svgSnapshot: async ({ page, htmlToSvgAssetsDir }, use, testInfo) => {
     if (testInfo.project.use.browserName && testInfo.project.use.browserName !== "chromium") {
       throw new Error("svgSnapshot needs Chromium or Chrome (it reads the layout over CDP)");
     }
     await use(async (name, target = page) => {
-      const recorder = recorderFor(target.context());
       const dir = testInfo.outputPath("svg-snapshots", name);
-      await capture(target, dir, await styles(htmlToSvgBinary), recorder);
-      const { svg, report } = await convert(htmlToSvgBinary, dir, htmlToSvgAssetsDir);
-      await testInfo.attach(`${name}.svg`, { body: svg, contentType: "image/svg+xml" });
-      return { svg, report, dir };
+      const result = await snapshot(target, {
+        dir,
+        assetsDir: htmlToSvgAssetsDir,
+        recorder: recorderFor(target.context()),
+      });
+      await testInfo.attach(`${name}.svg`, { body: result.svg, contentType: "image/svg+xml" });
+      return { ...result, dir };
     });
   },
 });

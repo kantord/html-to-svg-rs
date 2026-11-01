@@ -12,8 +12,7 @@ interface Summary {
   status: number | null;
   date: string;
   svgBytes: number;
-  visiblyDifferentPercent: number;
-  misplacedPercent: number;
+  differingPercent: number;
   boxes: number;
   textLines: number;
   fontsMissing: string[];
@@ -66,13 +65,13 @@ const html = `<!doctype html>
 <body>
 <h1>Live snapshots</h1>
 <p class="lede">Real pages at 1280x800, captured by Chrome and converted by html-to-svg. Per site: Chrome's screenshot,
-our SVG file as your browser draws it, and where our SVG (drawn by resvg) differs from Chrome's screenshot
-(orange: anti-aliasing or a sub-pixel shift; red: misplaced). Click a picture for the full size.</p>
+our SVG file as your browser draws it, and where our SVG (drawn by the same Chrome) differs from Chrome's
+screenshot (red; pixelmatch, which ignores anti-aliasing). Click a picture for the full size.</p>
 ${sites
   .map(
     (s) => `<section>
   <h2><a href="${esc(s.url)}">${esc(s.name)}</a></h2>
-  <p class="meta">HTTP ${s.status ?? "?"} · misplaced <b>${s.misplacedPercent}%</b> · visibly different <b>${s.visiblyDifferentPercent}%</b>
+  <p class="meta">HTTP ${s.status ?? "?"} · pixels differing <b>${s.differingPercent}%</b>
     · ${s.boxes} boxes, ${s.textLines} text lines · ${s.rasterFallbacks} cropped from the screenshot
     · SVG ${(s.svgBytes / 1024).toFixed(0)} KB · ${esc(s.date.slice(0, 16).replace("T", " "))}</p>
   <div class="row">

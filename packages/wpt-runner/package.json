@@ -8,13 +8,14 @@
     "wpt": "node src/main.ts"
   },
   "dependencies": {
-    "@playwright/test": "1.64.1",
+    "@playwright/test": "catalog:",
+    "html-to-svg-rs": "workspace:*",
     "playwright-html-to-svg-rs": "workspace:*",
-    "pngjs": "^7.0.0"
+    "pngjs": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^26.6.6",
-    "@types/pngjs": "^6.0.5",
-    "typescript": "^7.0.2"
+    "@types/node": "catalog:",
+    "@types/pngjs": "catalog:",
+    "typescript": "catalog:"
   }
 }

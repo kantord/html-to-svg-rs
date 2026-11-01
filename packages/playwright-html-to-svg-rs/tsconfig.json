@@ -1,11 +1,8 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "es2022",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "strict": true,
-    "types": ["node"],
-    "skipLibCheck": true,
+    // `page.evaluate(...)` callbacks run in the browser.
+    "lib": ["es2023", "dom"],
     "declaration": true,
     "outDir": "dist",
     "rootDir": "."

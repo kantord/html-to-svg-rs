@@ -162,6 +162,33 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@napi-rs/cli':
+      specifier: 3.10.9
+      version: 3.10.9
+    '@playwright/test':
+      specifier: 1.64.1
+      version: 1.64.1
+    '@types/node':
+      specifier: 26.6.6
+      version: 26.6.6
+    '@types/pngjs':
+      specifier: 6.0.5
+      version: 6.0.5
+    pixelmatch:
+      specifier: 8.0.0
+      version: 8.0.0
+    pngjs:
+      specifier: 7.0.0
+      version: 7.0.0
+    typescript:
+      specifier: 7.0.2
+      version: 7.0.2
+    vite:
+      specifier: 8.3.5
+      version: 8.3.5
+
 importers:
 
   .: {}
@@ -169,28 +196,38 @@ importers:
   packages/html-to-svg-rs:
     devDependencies:
       '@napi-rs/cli':
-        specifier: 3.10.9
+        specifier: 'catalog:'
         version: 3.10.9(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(@types/node@26.6.6)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.6
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
 
   packages/playwright-html-to-svg-rs:
+    dependencies:
+      html-to-svg-rs:
+        specifier: workspace:*
+        version: link:../html-to-svg-rs
     devDependencies:
       '@playwright/test':
-        specifier: 1.64.1
+        specifier: 'catalog:'
         version: 1.64.1
       '@types/node':
-        specifier: ^26.6.6
+        specifier: 'catalog:'
         version: 26.6.6
       '@types/pngjs':
-        specifier: ^6.0.5
+        specifier: 'catalog:'
         version: 6.0.5
       pixelmatch:
-        specifier: ^8.0.0
+        specifier: 'catalog:'
         version: 8.0.0
       pngjs:
-        specifier: ^7.0.0
+        specifier: 'catalog:'
         version: 7.0.0
       typescript:
-        specifier: ^7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
 
   packages/test-fixtures:
@@ -200,35 +237,38 @@ importers:
         version: 5.3.0
     devDependencies:
       '@types/node':
-        specifier: ^26.6.6
+        specifier: 'catalog:'
         version: 26.6.6
       typescript:
-        specifier: ^7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       vite:
-        specifier: ^8.3.5
+        specifier: 'catalog:'
         version: 8.3.5(@types/node@26.6.6)
 
   packages/wpt-runner:
     dependencies:
       '@playwright/test':
-        specifier: 1.64.1
+        specifier: 'catalog:'
         version: 1.64.1
+      html-to-svg-rs:
+        specifier: workspace:*
+        version: link:../html-to-svg-rs
       playwright-html-to-svg-rs:
         specifier: workspace:*
         version: link:../playwright-html-to-svg-rs
       pngjs:
-        specifier: ^7.0.0
+        specifier: 'catalog:'
         version: 7.0.0
     devDependencies:
       '@types/node':
-        specifier: ^26.6.6
+        specifier: 'catalog:'
         version: 26.6.6
       '@types/pngjs':
-        specifier: ^6.0.5
+        specifier: 'catalog:'
         version: 6.0.5
       typescript:
-        specifier: ^7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
 
 packages:

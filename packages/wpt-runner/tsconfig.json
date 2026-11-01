@@ -1,15 +1,12 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "es2022",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "strict": true,
-    "skipLibCheck": true,
+    // `page.evaluate(...)` callbacks run in the browser.
+    "lib": ["es2023", "dom"],
+    // Run by Node directly (type stripping): no emit, `.ts` imports, only erasable syntax.
     "noEmit": true,
     "allowImportingTsExtensions": true,
-    "erasableSyntaxOnly": true,
-    "verbatimModuleSyntax": true,
-    "types": ["node"]
+    "erasableSyntaxOnly": true
   },
   "include": ["src"]
 }

@@ -34,7 +34,8 @@
     "artifacts": "napi artifacts",
     "prepublishOnly": "napi prepublish -t npm",
     "version": "napi version",
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test \"test/*.test.js\"",
+    "typecheck": "tsc --noEmit"
   },
   "napi": {
     "binaryName": "html-to-svg",
@@ -49,6 +50,8 @@
     ]
   },
   "devDependencies": {
-    "@napi-rs/cli": "3.10.9"
+    "@napi-rs/cli": "catalog:",
+    "typescript": "catalog:",
+    "@types/node": "catalog:"
   }
 }

@@ -1,19 +1,18 @@
 // Proof of concept on live sites: each test opens a real page, takes an SVG snapshot, and keeps
-// Chrome's screenshot (page.png), our SVG (page.svg), our SVG drawn by resvg (svg.png) and where
-// they differ (diff.png) in out/live/<site>/, with the numbers in summary.json.
+// Chrome's screenshot (page.png), our SVG (page.svg), our SVG drawn by the same Chrome (svg.png)
+// and where they differ (diff.png) in out/live/<site>/, with the numbers in summary.json.
 //
 // Not part of `pnpm test`: the pages need the network and change every day. Run with
 // `just live-snapshots` (in the test container; it also writes out/live/index.html). A test fails
 // only when no SVG comes out; how close it is to Chrome is recorded, not asserted.
 
-import { execFile } from "node:child_process";
-import { copyFile, mkdir, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { promisify } from "node:util";
+
+import pixelmatch from "pixelmatch";
+import { PNG } from "pngjs";
 
 import { expect, test } from "../../src/index.js";
-
-const run = promisify(execFile);
 const OUT = new URL("../../../../out/live/", import.meta.url).pathname;
 
 const SITES: { name: string; url: string }[] = [
@@ -27,7 +26,7 @@ const SITES: { name: string; url: string }[] = [
 test.describe.configure({ mode: "parallel" });
 
 for (const site of SITES) {
-  test(site.name, async ({ page, svgSnapshot, htmlToSvgBinary }) => {
+  test(site.name, async ({ page, svgSnapshot }) => {
     test.setTimeout(120_000);
     const response = await page.goto(site.url, { waitUntil: "load", timeout: 60_000 });
     // Let late content (client rendering, lazy images, web fonts) arrive; a page that keeps
@@ -35,39 +34,43 @@ for (const site of SITES) {
     await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
     await page.waitForTimeout(1_000);
 
-    const { svg, report, dir } = await svgSnapshot(site.name);
+    const { svg, report, fonts, dir } = await svgSnapshot(site.name);
     expect(svg.startsWith("<svg")).toBe(true);
 
-    // How far our SVG (drawn by resvg, an independent renderer) is from Chrome's screenshot.
-    const { stdout } = await run(htmlToSvgBinary, ["diff", dir]);
-    const line = stdout.split("\n").find((l) => l.trim().startsWith("svg vs chrome")) ?? "";
-    const number = (label: string) => Number(new RegExp(`${label} ([\\d.]+)%`).exec(line)?.[1] ?? NaN);
+    // How far our SVG, drawn by the same Chrome, is from Chrome's screenshot of the page.
+    const chrome = PNG.sync.read(await readFile(join(dir, "chrome.png")));
+    await page.setViewportSize({ width: chrome.width, height: chrome.height });
+    await page.setContent(`<body style="margin:0">${svg}</body>`);
+    const drawn = await page.screenshot({ scale: "css" });
+    const diff = new PNG({ width: chrome.width, height: chrome.height });
+    const differing = pixelmatch(chrome.data, PNG.sync.read(drawn).data, diff.data, chrome.width, chrome.height, {
+      threshold: 0.2,
+    });
 
     const out = join(OUT, site.name);
     await mkdir(out, { recursive: true });
     await copyFile(join(dir, "chrome.png"), join(out, "page.png"));
-    await copyFile(join(dir, "out.svg"), join(out, "page.svg"));
-    await copyFile(join(dir, "svg-via-resvg.png"), join(out, "svg.png"));
-    await copyFile(join(dir, "diff-svg.png"), join(out, "diff.png"));
+    await writeFile(join(out, "page.svg"), svg);
+    await writeFile(join(out, "svg.png"), drawn);
+    await writeFile(join(out, "diff.png"), PNG.sync.write(diff));
     const summary = {
       name: site.name,
       url: site.url,
       status: response?.status() ?? null,
       date: new Date().toISOString(),
       svgBytes: Buffer.byteLength(svg),
-      visiblyDifferentPercent: number("visibly different pixels"),
-      misplacedPercent: number("misplaced"),
-      boxes: report.report.boxes,
-      textLines: report.report.text_lines,
-      fontsMissing: report.fonts.missing,
-      rasterFallbacks: report.report.raster_fallbacks.length,
-      dropped: Object.keys(report.report.dropped).length,
-      warnings: report.report.warnings,
+      differingPercent: Math.round((differing / (chrome.width * chrome.height)) * 10_000) / 100,
+      boxes: report.boxes,
+      textLines: report.textLines,
+      fontsMissing: fonts.missing,
+      rasterFallbacks: report.rasterFallbacks.length,
+      dropped: Object.keys(report.dropped).length,
+      warnings: report.warnings,
     };
     await writeFile(join(out, "summary.json"), JSON.stringify(summary, null, 2));
     test.info().annotations.push({
       type: "fidelity",
-      description: `${summary.misplacedPercent}% misplaced, ${summary.visiblyDifferentPercent}% visibly different (HTTP ${summary.status})`,
+      description: `${summary.differingPercent}% of pixels differ (HTTP ${summary.status})`,
     });
   });
 }

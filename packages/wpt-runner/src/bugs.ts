@@ -51,10 +51,9 @@ export async function loadBugs(repo: string): Promise<Map<string, Bug>> {
 export async function bugProblems(repo: string, entries: Map<string, Entry>, bugs: Map<string, Bug>): Promise<string[]> {
   const problems: string[] = [];
   for (const e of entries.values()) {
-    if (e.status === "bug" && (!e.bug || !bugs.has(e.bug))) {
-      problems.push(`${e.test}: bug "${e.bug ?? ""}" has no file wpt/bugs/${e.bug ?? "?"}.md`);
-    }
-    if (e.status === "bug" && e.bug && bugs.get(e.bug)?.status === "fixed") {
+    if (e.status !== "bug") continue;
+    if (!bugs.has(e.bug)) problems.push(`${e.test}: bug "${e.bug}" has no file wpt/bugs/${e.bug}.md`);
+    if (bugs.get(e.bug)?.status === "fixed") {
       problems.push(`${e.test}: still fails, but bug ${e.bug} is marked fixed`);
     }
   }
@@ -77,7 +76,7 @@ export async function bugProblems(repo: string, entries: Map<string, Entry>, bug
  * only by its Rust regression test) is never listed.
  */
 export function closable(entries: Map<string, Entry>, bugs: Map<string, Bug>, passedNow: Set<string>): Bug[] {
-  const failing = new Set([...entries.values()].filter((e) => e.status === "bug").map((e) => e.bug));
+  const failing = new Set([...entries.values()].flatMap((e) => (e.status === "bug" ? [e.bug] : [])));
   return [...bugs.values()].filter((b) => b.status === "open" && passedNow.has(b.id) && !failing.has(b.id));
 }
 
@@ -85,7 +84,7 @@ export function closable(entries: Map<string, Entry>, bugs: Map<string, Bug>, pa
 export function failingCounts(entries: Map<string, Entry>): Map<string, number> {
   const counts = new Map<string, number>();
   for (const e of entries.values()) {
-    if (e.status === "bug" && e.bug) counts.set(e.bug, (counts.get(e.bug) ?? 0) + 1);
+    if (e.status === "bug") counts.set(e.bug, (counts.get(e.bug) ?? 0) + 1);
   }
   return counts;
 }

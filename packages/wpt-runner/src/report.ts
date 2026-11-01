@@ -9,7 +9,7 @@ import { join, relative } from "node:path";
 import { type Bug, loadBugs } from "./bugs.ts";
 import { readReftests } from "./manifest.ts";
 import { refPicture, testFolder } from "./paths.ts";
-import { load, type Entry } from "./results.ts";
+import { load, scoreOf, type Entry } from "./results.ts";
 
 const escape = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -30,14 +30,14 @@ export async function writeReport(repo: string, out: string): Promise<string> {
   rows.sort(
     (a, b) =>
       group(a).localeCompare(group(b)) ||
-      (b.score?.outside ?? 0) - (a.score?.outside ?? 0) ||
-      (b.score?.text ?? 0) - (a.score?.text ?? 0),
+      (scoreOf(b)?.outside ?? 0) - (scoreOf(a)?.outside ?? 0) ||
+      (scoreOf(b)?.text ?? 0) - (scoreOf(a)?.text ?? 0),
   );
   const heading = (e: Entry, bug: Bug | undefined) =>
     e.status === "fail"
       ? "Not triaged yet"
       : e.status === "bug"
-        ? `Bug <a href="${escape(relative(out, join(repo, "wpt/bugs", `${e.bug}.md`)))}">${escape(e.bug ?? "")}</a>: ${escape(bug?.title ?? "(no file)")}`
+        ? `Bug <a href="${escape(relative(out, join(repo, "wpt/bugs", `${e.bug}.md`)))}">${escape(e.bug)}</a>: ${escape(bug?.title ?? "(no file)")}`
         : e.status === "not-planned"
           ? "Not planned"
           : escape(e.status);
@@ -50,14 +50,14 @@ export async function writeReport(repo: string, out: string): Promise<string> {
   const items = rows
     .map((e) => {
       const g = group(e);
-      const title = g === lastGroup ? "" : `<h3 class="group">${heading(e, e.bug ? bugs.get(e.bug) : undefined)} (${rows.filter((r) => group(r) === g).length})</h3>`;
+      const title = g === lastGroup ? "" : `<h3 class="group">${heading(e, e.status === "bug" ? bugs.get(e.bug) : undefined)} (${rows.filter((r) => group(r) === g).length})</h3>`;
       lastGroup = g;
       const dir = testFolder(e.test);
       const refs = (refsOf.get(e.test) ?? []).map(refPicture).filter((p) => existsSync(p));
       return `${title}<section>
   <h2><a href="http://wpt.live${escape(e.test)}">${escape(e.test)}</a></h2>
   <p class="meta"><span class="status">${e.status}</span>
-    misplaced outside text <b>${e.score?.outside ?? "?"}</b> · inside text <b>${e.score?.text ?? "?"}</b> · not exactly equal outside text ${e.score?.exact ?? "?"}${e.lastPass ? ` · last passed ${escape(e.lastPass.date)} at ${escape(e.lastPass.version)}` : ""}${e.note ? ` · ${escape(e.note)}` : ""}</p>
+    misplaced outside text <b>${scoreOf(e)?.outside ?? "?"}</b> · inside text <b>${scoreOf(e)?.text ?? "?"}</b> · not exactly equal outside text ${scoreOf(e)?.exact ?? "?"}${e.lastPass ? ` · last passed ${escape(e.lastPass.date)} at ${escape(e.lastPass.version)}` : ""}${"note" in e ? ` · ${escape(e.note)}` : ""}</p>
   <div class="row">
     ${img(join(dir, "chrome.png"), "Chrome: the page")}
     ${img(join(dir, "svg.png"), "our SVG, drawn by the same Chrome")}

@@ -43,10 +43,11 @@ test("convert() writes images to a shared assets folder when asked", async () =>
   try {
     const assetsDir = join(dir, "assets");
     const { svg, assets } = await convert(join(FIXTURES, "xhtml-canvas"), { assetsDir, svgDir: dir });
-    assert.equal(assets.length, 1);
-    assert.match(assets[0], /^[0-9a-f]{64}\.png$/);
+    const [asset, ...others] = assets;
+    assert.ok(asset !== undefined && others.length === 0, "one asset: the canvas");
+    assert.match(asset, /^[0-9a-f]{64}\.png$/);
     assert.deepEqual(readdirSync(assetsDir), assets);
-    assert.ok(svg.includes(`href="assets/${assets[0]}"`), "linked by the path from svgDir");
+    assert.ok(svg.includes(`href="assets/${asset}"`), "linked by the path from svgDir");
     assert.ok(!svg.includes("data:image/png"));
   } finally {
     rmSync(dir, { recursive: true, force: true });

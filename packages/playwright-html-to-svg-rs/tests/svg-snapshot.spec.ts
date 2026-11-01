@@ -10,7 +10,7 @@ import { dirname, join, resolve } from "node:path";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
 
-import { expect, test } from "../src/index.js";
+import { expect, snapshot, test } from "../src/index.js";
 
 /** Files the fixtures app serves as they are (`packages/test-fixtures/public`). */
 const PUBLIC = new URL("../../test-fixtures/public/", import.meta.url);
@@ -32,21 +32,21 @@ test("the SVG keeps the page's data-* attributes", async ({ svgSnapshot }) => {
 });
 
 test("the conversion finds every font and image the page used", async ({ svgSnapshot }) => {
-  const { report, dir } = await svgSnapshot("card");
+  const { fonts, report, dir } = await svgSnapshot("card");
 
   // Every face Chrome drew with was found again: system faces through fc-list, the web font
   // from the saved response.
-  expect(report.fonts.missing).toEqual([]);
-  expect(report.fonts.faces).toBeGreaterThanOrEqual(2);
+  expect(fonts.missing).toEqual([]);
+  expect(fonts.faces).toBeGreaterThanOrEqual(2);
   // Nothing was left undrawn (a background url() that was not captured would warn).
-  expect(report.report.warnings).toEqual([]);
+  expect(report.warnings).toEqual([]);
 
   // Only the subset the page's text needs is downloaded (Vite names it with a content hash).
-  const fonts = JSON.parse(await readFile(join(dir, "fonts.json"), "utf8"));
-  expect(Object.values(fonts.web)).toEqual([
+  const fontsFile = JSON.parse(await readFile(join(dir, "fonts.json"), "utf8"));
+  expect(Object.values(fontsFile.web)).toEqual([
     expect.stringMatching(/\/assets\/pacifico-latin-400-normal-[\w-]+\.woff2$/),
   ]);
-  const faces = Object.values(fonts.used).flat() as { family: string; custom: boolean }[];
+  const faces = Object.values(fontsFile.used).flat() as { family: string; custom: boolean }[];
   expect(faces).toContainEqual(expect.objectContaining({ family: "Pacifico", custom: true }));
 
   const images = JSON.parse(await readFile(join(dir, "images.json"), "utf8"));
@@ -57,7 +57,7 @@ test("the conversion finds every font and image the page used", async ({ svgSnap
 test("<img> and <canvas> are cropped from Chrome's screenshot", async ({ svgSnapshot }) => {
   const { svg, report } = await svgSnapshot("card");
 
-  const fallbacks = report.report.raster_fallbacks.map((f) => f.split(" ")[0]);
+  const fallbacks = report.rasterFallbacks.map((f) => f.split(" ")[0]);
   expect(fallbacks.sort()).toEqual(["<canvas>", "<img>"]);
   // The two crops, and the banner's downloaded background image.
   expect(svg.match(/<image\b/g)?.length).toBe(3);
@@ -112,7 +112,23 @@ test("an image reached through a redirect is captured", async ({ page, svgSnapsh
 
   const images = JSON.parse(await readFile(join(dir, "images.json"), "utf8"));
   expect(Object.keys(images.images)).toContain(`${baseURL}/moved/stripes.png`);
-  expect(report.report.warnings).toEqual([]);
+  expect(report.warnings).toEqual([]);
+});
+
+test("snapshot(page) needs no preparation", async ({ browser, baseURL }) => {
+  // A page of its own, opened without the fixture: nothing recorded its downloads.
+  const context = await browser.newContext({ viewport: { width: 800, height: 800 }, ...(baseURL ? { baseURL } : {}) });
+  const page = await context.newPage();
+  await page.goto("/card.html");
+
+  const { svg, fonts, report, dir } = await snapshot(page);
+
+  expect(dir).toBeUndefined();
+  expect(svg).toContain('data-testid="web-font"');
+  // The web font and the images were read from what Chrome kept for the page.
+  expect(fonts.missing).toEqual([]);
+  expect(report.warnings).toEqual([]);
+  await context.close();
 });
 
 test.describe("with htmlToSvgAssetsDir", () => {
@@ -127,12 +143,12 @@ test.describe("with htmlToSvgAssetsDir", () => {
 
     // Nothing inlined; both SVGs link the same files, and each file exists once.
     for (const { svg } of [first, second]) expect(svg).not.toContain("data:image/png");
-    expect(second.report.assets).toEqual(first.report.assets);
-    expect((await readdir(assetsDir)).sort()).toEqual([...first.report.assets].sort());
-    for (const name of first.report.assets) expect(name).toMatch(/^[0-9a-f]{64}\.png$/);
+    expect(second.assets).toEqual(first.assets);
+    expect((await readdir(assetsDir)).sort()).toEqual([...first.assets].sort());
+    for (const name of first.assets) expect(name).toMatch(/^[0-9a-f]{64}\.png$/);
 
     // Every link resolves from the SVG's own folder to a file whose name is its content's hash.
-    const hrefs = [...first.svg.matchAll(/href="([^"#][^"]*)"/g)].map((m) => m[1]);
+    const hrefs = [...first.svg.matchAll(/href="([^"#][^"]*)"/g)].flatMap((m) => (m[1] ? [m[1]] : []));
     expect(hrefs.length).toBeGreaterThan(0);
     for (const href of hrefs) {
       const file = resolve(first.dir, href);
@@ -145,6 +161,6 @@ test.describe("with htmlToSvgAssetsDir", () => {
     // same image on another page or in another test run is the same file.
     const stripes = await readFile(new URL("stripes.png", PUBLIC));
     const banner = `${createHash("sha256").update(stripes).digest("hex")}.png`;
-    expect(first.report.assets).toContain(banner);
+    expect(first.assets).toContain(banner);
   });
 });

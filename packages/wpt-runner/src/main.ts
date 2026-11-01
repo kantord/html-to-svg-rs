@@ -1,6 +1,6 @@
 // Runs web-platform-tests reftests through html-to-svg and keeps wpt/results.jsonl.
 //
-//   node src/main.ts run [--binary B] [--jobs N] [--keep-passing] [path-prefix...]
+//   node src/main.ts run [--jobs N] [--keep-passing] [path-prefix...]
 //   node src/main.ts check
 //   node src/main.ts report
 //
@@ -26,7 +26,8 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { type Browser, type BrowserContext, chromium, type Page } from "@playwright/test";
-import { capture, convert, ResourceRecorder, styles } from "playwright-html-to-svg-rs";
+import { convert, styles } from "html-to-svg-rs";
+import { capture, ResourceRecorder } from "playwright-html-to-svg-rs";
 
 import { difference, fidelity, passes, textMask } from "./compare.ts";
 import { readReftests, type Reftest } from "./manifest.ts";
@@ -84,7 +85,6 @@ const THRESHOLD = { outside: 30, text: 30 };
 
 interface Args {
   command: string;
-  binary: string;
   jobs: number;
   keepPassing: boolean;
   prefixes: string[];
@@ -93,16 +93,17 @@ interface Args {
 function parseArgs(argv: string[]): Args {
   const args: Args = {
     command: argv[0] ?? "",
-    binary: process.env.HTML_TO_SVG_BIN ?? "html-to-svg",
     jobs: Math.max(1, Math.floor(cpus().length / 2)),
     keepPassing: false,
     prefixes: [],
   };
-  for (let i = 1; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--binary") args.binary = argv[++i];
-    else if (a === "--jobs") args.jobs = Number(argv[++i]);
-    else if (a === "--keep-passing") args.keepPassing = true;
+  const rest = argv.slice(1);
+  for (let a = rest.shift(); a !== undefined; a = rest.shift()) {
+    if (a === "--jobs") {
+      const jobs = Number(rest.shift());
+      if (!Number.isInteger(jobs) || jobs < 1) throw new Error("--jobs needs a whole number above 0");
+      args.jobs = jobs;
+    } else if (a === "--keep-passing") args.keepPassing = true;
     else args.prefixes.push(a.replace(/^\/+/, ""));
   }
   return args;
@@ -177,8 +178,8 @@ class Job {
     const dir = testFolder(test.url);
     this.recorder.responses.splice(0);
     await open(this.page, test.url, test.long);
-    await capture(this.page, dir, await styles(args.binary), this.recorder);
-    const { svg } = await convert(args.binary, dir);
+    await capture(this.page, dir, styles(), this.recorder);
+    const { svg } = await convert(dir);
     // The same page with its text invisible: where it differs from chrome.png is the text layer.
     const hide = await this.page.addStyleTag({ content: HIDE_TEXT });
     const textless = await this.page.screenshot({ scale: "css" });
@@ -250,7 +251,7 @@ async function runTests(args: Args): Promise<number> {
   const changes: Change[] = [];
   const flaky: string[] = [];
   const counts = new Map<string, number>();
-  let next = 0;
+  const queue = tests.values();
   let done = 0;
 
   const worker = async () => {
@@ -262,11 +263,12 @@ async function runTests(args: Args): Promise<number> {
         // A page that timed out may still be busy: go on with fresh contexts.
         await job.close();
         job = await Job.open(gate, comparison);
-        return { kind: "error", message: String((e as Error).message ?? e).split("\n")[0] };
+        const message = e instanceof Error ? e.message : String(e);
+        return { kind: "error", message: message.split("\n", 1)[0] ?? message };
       }
     };
-    while (next < tests.length) {
-      const test = tests[next++];
+    // One queue shared by the workers: each takes the next test until none is left.
+    for (const test of queue) {
       let outcome = await attempt(test);
       if (outcome.kind !== "pass") {
         // Under the load of parallel jobs a page is now and then captured before it settles
@@ -339,7 +341,7 @@ async function main(): Promise<number> {
     for (const p of problems) console.log(p);
     return problems.length ? 1 : 0;
   }
-  console.error("usage: main.ts run [--binary B] [--jobs N] [--keep-passing] [prefix...] | check | report");
+  console.error("usage: main.ts run [--jobs N] [--keep-passing] [prefix...] | check | report");
   return 2;
 }
 

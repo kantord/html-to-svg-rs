@@ -1,13 +1,12 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "es2022",
+    // Bundled by Vite for the browser.
     "module": "esnext",
     "moduleResolution": "bundler",
-    "strict": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "lib": ["es2022", "dom"],
-    "types": ["vite/client", "node"]
+    "lib": ["es2023", "dom"],
+    "types": ["vite/client", "node"],
+    "noEmit": true
   },
   "include": ["pages", "vite.config.ts"]
 }

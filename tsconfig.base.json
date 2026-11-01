@@ -1,0 +1,26 @@
+{
+  // Shared by every TypeScript (and type-checked JavaScript) package: strict, plus the checks
+  // `strict` leaves out. Each package's tsconfig.json extends this and adds what is its own.
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+
+    "strict": true,
+    // `array[i]` and `record[key]` may be undefined: say what happens then.
+    "noUncheckedIndexedAccess": true,
+    // `{ x?: string }` means absent or a string, not `undefined`.
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+
+    // Imports as written: type-only imports marked, nothing elided behind your back.
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  }
+}
