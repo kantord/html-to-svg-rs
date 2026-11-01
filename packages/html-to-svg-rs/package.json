@@ -1,0 +1,54 @@
+{
+  "name": "html-to-svg-rs",
+  "version": "0.1.0",
+  "description": "Turns a page Chrome laid out into SVG, natively in Node.js (Rust, via napi-rs).",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kantord/html-to-svg-rs.git",
+    "directory": "packages/html-to-svg-rs"
+  },
+  "keywords": [
+    "svg",
+    "html",
+    "screenshot",
+    "chrome",
+    "napi-rs"
+  ],
+  "type": "commonjs",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">= 18"
+  },
+  "scripts": {
+    "build": "napi build --platform --manifest-path ../../crates/html-to-svg-node/Cargo.toml --output-dir . --js index.js --dts index.d.ts --release --strip",
+    "build:debug": "napi build --platform --manifest-path ../../crates/html-to-svg-node/Cargo.toml --output-dir . --js index.js --dts index.d.ts",
+    "create-npm-dirs": "napi create-npm-dirs",
+    "artifacts": "napi artifacts",
+    "prepublishOnly": "napi prepublish -t npm",
+    "version": "napi version",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "napi": {
+    "binaryName": "html-to-svg",
+    "targets": [
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-unknown-linux-musl",
+      "aarch64-unknown-linux-musl",
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-pc-windows-msvc"
+    ]
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "3.10.9"
+  }
+}

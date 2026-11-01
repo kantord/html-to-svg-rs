@@ -6,6 +6,7 @@
 
 mod annotate;
 mod assets;
+#[cfg(feature = "capture")]
 pub mod capture;
 mod fonts;
 mod geometry;

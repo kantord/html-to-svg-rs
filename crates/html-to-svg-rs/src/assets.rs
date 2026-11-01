@@ -30,6 +30,42 @@ pub struct AssetsOptions {
     pub href_prefix: String,
 }
 
+impl AssetsOptions {
+    /// Assets in `assets` (created when missing), linked from an SVG that is written to `svg_dir`:
+    /// by `href` + file name, or by default by the path from `svg_dir` to `assets`.
+    pub fn for_svg_in(svg_dir: &Path, assets: &Path, href: Option<&str>) -> Result<Self> {
+        std::fs::create_dir_all(assets).with_context(|| format!("create {}", assets.display()))?;
+        let href_prefix = match href {
+            Some(href) => href.to_owned(),
+            None => {
+                let from = std::fs::canonicalize(svg_dir)
+                    .with_context(|| format!("find {}", svg_dir.display()))?;
+                let to = std::fs::canonicalize(assets)?;
+                let common = from
+                    .components()
+                    .zip(to.components())
+                    .take_while(|(a, b)| a == b)
+                    .count();
+                let mut parts: Vec<String> = from
+                    .components()
+                    .skip(common)
+                    .map(|_| "..".into())
+                    .collect();
+                parts.extend(
+                    to.components()
+                        .skip(common)
+                        .map(|c| c.as_os_str().to_string_lossy().into_owned()),
+                );
+                parts.iter().map(|p| format!("{p}/")).collect()
+            }
+        };
+        Ok(Self {
+            dir: assets.to_owned(),
+            href_prefix,
+        })
+    }
+}
+
 /// Content hash (hex SHA-256) of some bytes: the asset's file name without extension.
 pub fn hash(bytes: &[u8]) -> String {
     Sha256::digest(bytes)

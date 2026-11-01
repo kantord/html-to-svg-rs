@@ -133,7 +133,7 @@ fn convert(dir: &Path, args: &Args) -> Result<()> {
             assets: args
                 .assets
                 .as_ref()
-                .map(|assets| assets_options(dir, assets, args.assets_href.as_deref()))
+                .map(|assets| AssetsOptions::for_svg_in(dir, assets, args.assets_href.as_deref()))
                 .transpose()?,
         },
     )?;
@@ -171,39 +171,6 @@ fn convert(dir: &Path, args: &Args) -> Result<()> {
     }
     println!("wrote {0}/out.svg, {0}/takumi.png", dir.display());
     Ok(())
-}
-
-/// The SVG (written to `dir`) links each asset by `href` + file name; by default `href` is the
-/// path from `dir` to the assets folder.
-fn assets_options(dir: &Path, assets: &Path, href: Option<&str>) -> Result<AssetsOptions> {
-    std::fs::create_dir_all(assets).with_context(|| format!("create {}", assets.display()))?;
-    let href_prefix = match href {
-        Some(href) => href.to_owned(),
-        None => {
-            let from = std::fs::canonicalize(dir)?;
-            let to = std::fs::canonicalize(assets)?;
-            let common = from
-                .components()
-                .zip(to.components())
-                .take_while(|(a, b)| a == b)
-                .count();
-            let mut parts: Vec<String> = from
-                .components()
-                .skip(common)
-                .map(|_| "..".into())
-                .collect();
-            parts.extend(
-                to.components()
-                    .skip(common)
-                    .map(|c| c.as_os_str().to_string_lossy().into_owned()),
-            );
-            parts.iter().map(|p| format!("{p}/")).collect()
-        }
-    };
-    Ok(AssetsOptions {
-        dir: assets.to_owned(),
-        href_prefix,
-    })
 }
 
 fn print_report(r: &Report) {

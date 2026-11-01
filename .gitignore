@@ -34,3 +34,8 @@ playwright-report/
 
 # wpt runner captures
 /out/
+
+# html-to-svg-rs npm package: built native addons and the per-platform packages napi generates
+/packages/html-to-svg-rs/*.node
+/packages/html-to-svg-rs/npm/
+/packages/html-to-svg-rs/artifacts/
