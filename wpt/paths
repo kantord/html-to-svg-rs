@@ -1,0 +1,19 @@
+# The parts of web-platform-tests fetched into the checkout besides the areas tested
+# (wpt/areas): the server and the files tests share. Git sparse-checkout, cone mode, which also
+# fetches the files directly inside each listed folder's parents (so some tests outside
+# wpt/areas are in the checkout; the runner leaves them alone).
+tools
+resources
+common
+fonts
+docs
+css/support
+css/reference
+# Helpers and files tests in the areas below load from elsewhere in WPT (a test whose script is
+# missing never drops reftest-wait, and times out):
+web-animations
+images
+media
+css/css-transitions/support
+css/filter-effects/reference
+css/css-images/support

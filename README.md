@@ -22,6 +22,8 @@ Two crates:
 - `packages/playwright-html-to-svg-rs`: a Playwright fixture, `svgSnapshot(name)`, that captures
   the page under test over CDP and converts it with the binary (pnpm workspace; see its README).
 - `packages/test-fixtures`: the pages those tests snapshot, a Vite app.
+- `packages/wpt-runner` and `wpt/`: web-platform-tests reftests run through the converter, with a
+  results database (`just wpt`; see `wpt/README.md`).
 
 The patched takumi-svg lives at the workspace root (`vendor/`, wired in by `[patch.crates-io]` in
 the root `Cargo.toml`).

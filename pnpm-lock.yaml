@@ -203,6 +203,28 @@ importers:
         specifier: ^8.3.5
         version: 8.3.5(@types/node@26.6.6)
 
+  packages/wpt-runner:
+    dependencies:
+      '@playwright/test':
+        specifier: 1.64.1
+        version: 1.64.1
+      playwright-html-to-svg-rs:
+        specifier: workspace:*
+        version: link:../playwright-html-to-svg-rs
+      pngjs:
+        specifier: ^7.0.0
+        version: 7.0.0
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.6
+        version: 26.6.6
+      '@types/pngjs':
+        specifier: ^6.0.5
+        version: 6.0.5
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
 packages:
 
   '@fontsource/pacifico@5.3.0':

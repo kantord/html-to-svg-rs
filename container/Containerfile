@@ -9,6 +9,7 @@ FROM mcr.microsoft.com/playwright:v1.64.1-noble
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       build-essential pkg-config ca-certificates curl fontconfig fonts-dejavu-core fonts-inter \
+      python3-venv \
  && rm -rf /var/lib/apt/lists/* \
  && fc-cache -f
 

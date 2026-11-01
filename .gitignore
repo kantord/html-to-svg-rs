@@ -31,3 +31,6 @@ node_modules/
 dist/
 test-results/
 playwright-report/
+
+# wpt runner captures
+/out/

@@ -1,0 +1,3 @@
+# The folders of web-platform-tests whose reftests `just wpt` runs (fetched with wpt/paths).
+css/css-backgrounds
+css/css-borders

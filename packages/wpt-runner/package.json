@@ -1,0 +1,20 @@
+{
+  "name": "wpt-runner",
+  "private": true,
+  "description": "Runs web-platform-tests reftests through html-to-svg and keeps wpt/results.jsonl.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "wpt": "node src/main.ts"
+  },
+  "dependencies": {
+    "@playwright/test": "1.64.1",
+    "playwright-html-to-svg-rs": "workspace:*",
+    "pngjs": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/pngjs": "^6.0.5",
+    "typescript": "^7.0.2"
+  }
+}
