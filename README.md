@@ -56,6 +56,11 @@ downloaded and drew with), `out.svg`, `takumi.png` (Takumi's own raster of the s
 1 px of the other picture matches it, so anti-aliasing or a sub-pixel shift; red = misplaced).
 Chromium comes from `$CHROME`, else `/opt/pw-browsers/chromium`, else chromiumoxide's own search.
 
+`convert --assets DIR` writes the images the SVG would inline as `data:` URLs to `DIR` instead,
+named `<sha256>.<ext>` (a downloaded image keeps its URL's extension; screenshot crops are `.png`),
+so SVGs that show the same image share one file. The SVG links them by the path from its own
+folder; `--assets-href PREFIX` sets another prefix, such as a CDN URL.
+
 Fonts need no flags: capture asks Chrome which face drew each element's text and saves the web
 fonts it downloaded; convert registers exactly those faces (system ones found through `fc-list`).
 `--font` adds files on top.

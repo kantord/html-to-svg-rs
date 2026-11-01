@@ -5,6 +5,7 @@
 //! directory into an SVG without a browser. See the workspace README for how the lowering works.
 
 mod annotate;
+mod assets;
 pub mod capture;
 mod fonts;
 mod geometry;
@@ -18,6 +19,7 @@ use anyhow::{Context, Result};
 use resvg::tiny_skia::Pixmap;
 use takumi::prelude::*;
 
+pub use assets::AssetsOptions;
 pub use fonts::Registered as RegisteredFonts;
 pub use lower::Report;
 /// The computed styles a capture must ask Chrome for (`DOMSnapshot.captureSnapshot`), in order.
@@ -31,6 +33,9 @@ pub struct ConvertOptions {
     pub fit_text: bool,
     /// Viewport used when the capture has no `chrome.png` to take the size from.
     pub fallback_size: (u32, u32),
+    /// Write embedded images to a shared folder, named by content hash, instead of inlining them
+    /// as `data:` URLs in every SVG.
+    pub assets: Option<AssetsOptions>,
 }
 
 impl Default for ConvertOptions {
@@ -39,6 +44,7 @@ impl Default for ConvertOptions {
             extra_fonts: Vec::new(),
             fit_text: true,
             fallback_size: (1024, 768),
+            assets: None,
         }
     }
 }
@@ -48,6 +54,8 @@ pub struct Conversion {
     pub svg: String,
     /// Takumi's own PNG raster of the same node tree.
     pub png: Vec<u8>,
+    /// Asset files the SVG refers to, under [`AssetsOptions::dir`] (empty without `assets`).
+    pub assets: Vec<String>,
     /// The faces of `fonts.json` that were found and registered (not counting `extra_fonts`).
     pub fonts: RegisteredFonts,
     pub report: Report,
@@ -108,8 +116,15 @@ pub fn convert(dir: &Path, options: &ConvertOptions) -> Result<Conversion> {
     let mut png = Vec::new();
     takumi::write_image(&image, &mut png, OutputFormat::Png)?;
 
+    let svg = annotate::apply(&svg, &lowered.annotations);
+    let (svg, assets) = match &options.assets {
+        Some(assets) => assets::externalize(&svg, assets, &resources::extensions_by_hash(dir))?,
+        None => (svg, Vec::new()),
+    };
+
     Ok(Conversion {
-        svg: annotate::apply(&svg, &lowered.annotations),
+        svg,
+        assets,
         png,
         fonts: registered,
         report: lowered.report,

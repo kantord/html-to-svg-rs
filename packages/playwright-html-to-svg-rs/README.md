@@ -19,6 +19,22 @@ faces not found, warnings (e.g. an image that was not captured), elements croppe
 screenshot (`<img>`, `<canvas>`, form controls). (`dir` is the capture under the test's output
 directory: `snapshot.json`, `chrome.png`, `out.svg`, the fonts and images Chrome used).
 
+## Shared assets
+
+By default each SVG is self-contained: images are inlined as `data:` URLs. With many snapshots
+showing the same images, set a shared folder instead:
+
+```ts
+export default defineConfig<HtmlToSvgOptions>({
+  use: { htmlToSvgAssetsDir: "svg-assets" },
+});
+```
+
+Each image is then written there once as `<sha256>.<ext>` and the SVGs link to it by a path
+relative to the SVG. Downloaded images keep their bytes and their URL's extension, so the same
+image is the same file in every snapshot and every run; `<img>`/`<canvas>` crops are `.png`. The
+SVG attached to the test report then needs the folder next to it to show its images.
+
 ## Setup
 
 - **Chromium or Chrome only:** the capture reads Chrome's layout over CDP.

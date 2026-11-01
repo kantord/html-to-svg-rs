@@ -40,6 +40,26 @@ pub fn data_urls(dir: &Path) -> BTreeMap<String, String> {
         .collect()
 }
 
+/// Content hash -> the extension of the URL each saved image was downloaded from (see
+/// [`crate::assets`]): an externalized asset keeps its original extension.
+pub fn extensions_by_hash(dir: &Path) -> BTreeMap<String, String> {
+    let Ok(bytes) = std::fs::read(dir.join("images.json")) else {
+        return BTreeMap::new();
+    };
+    let Ok(resources) = serde_json::from_slice::<Resources>(&bytes) else {
+        return BTreeMap::new();
+    };
+    resources
+        .images
+        .into_iter()
+        .filter_map(|(url, r)| {
+            let ext = crate::assets::extension_of_url(&url)?;
+            let body = std::fs::read(dir.join("images").join(&r.file)).ok()?;
+            Some((crate::assets::hash(&body), ext))
+        })
+        .collect()
+}
+
 /// Replaces every `url(...)` in a CSS value by its `data:` URL. `None` when one cannot be
 /// resolved (not captured): the caller drops the declaration and reports it.
 pub fn inline_urls(value: &str, data: &BTreeMap<String, String>) -> Option<String> {

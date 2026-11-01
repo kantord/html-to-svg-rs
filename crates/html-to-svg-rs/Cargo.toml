@@ -17,3 +17,4 @@ base64 = "0.22"
 # The WOFF/WOFF2 decoder Takumi itself uses, to read web fonts' PostScript names.
 wuff = { version = "0.2", default-features = false, features = ["brotli", "z"] }
 ttf-parser = "0.25"
+sha2 = "0.10"

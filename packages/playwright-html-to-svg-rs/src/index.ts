@@ -38,6 +38,8 @@ export interface ConversionReport {
     line_width_error: number[];
     line_width_error_fitted: number[];
   };
+  /** Files under `htmlToSvgAssetsDir` the SVG links to (empty when the option is not set). */
+  assets: string[];
 }
 
 export interface SvgSnapshot {
@@ -54,6 +56,12 @@ export interface HtmlToSvgOptions {
    * Path of the `html-to-svg` binary. Defaults to `$HTML_TO_SVG_BIN`, else `html-to-svg` on PATH.
    */
   htmlToSvgBinary: string;
+  /**
+   * A folder shared by all snapshots: images are written there once, named by content hash
+   * (`<sha256>.<ext>`), and the SVGs link to them by relative path instead of inlining them.
+   * Unset (the default), every SVG is self-contained.
+   */
+  htmlToSvgAssetsDir: string | undefined;
 }
 
 export interface HtmlToSvgFixtures {
@@ -64,12 +72,14 @@ export interface HtmlToSvgFixtures {
   svgSnapshot: (name: string, page?: Page) => Promise<SvgSnapshot>;
 }
 
-/** Converts a capture directory with the binary. */
+/** Converts a capture directory with the binary; with `assetsDir`, images go there. */
 export async function convert(
   binary: string,
   dir: string,
+  assetsDir?: string,
 ): Promise<{ svg: string; report: ConversionReport }> {
-  const { stdout } = await run(binary, ["convert", dir, "--json"], {
+  const assets = assetsDir ? ["--assets", assetsDir] : [];
+  const { stdout } = await run(binary, ["convert", dir, "--json", ...assets], {
     maxBuffer: 64 * 1024 * 1024,
   });
   const report = JSON.parse(stdout) as ConversionReport;
@@ -102,6 +112,7 @@ function recorderFor(context: BrowserContext): ResourceRecorder {
 
 export const test = base.extend<HtmlToSvgFixtures & HtmlToSvgOptions>({
   htmlToSvgBinary: [process.env.HTML_TO_SVG_BIN ?? "html-to-svg", { option: true }],
+  htmlToSvgAssetsDir: [undefined, { option: true }],
 
   // Font and image responses are recorded from the moment the context exists, before any hook
   // or test navigates, so `svgSnapshot` can save their bodies whenever it is called. (A context
@@ -112,7 +123,7 @@ export const test = base.extend<HtmlToSvgFixtures & HtmlToSvgOptions>({
     recorder.stop();
   },
 
-  svgSnapshot: async ({ page, htmlToSvgBinary }, use, testInfo) => {
+  svgSnapshot: async ({ page, htmlToSvgBinary, htmlToSvgAssetsDir }, use, testInfo) => {
     if (testInfo.project.use.browserName && testInfo.project.use.browserName !== "chromium") {
       throw new Error("svgSnapshot needs Chromium or Chrome (it reads the layout over CDP)");
     }
@@ -120,7 +131,7 @@ export const test = base.extend<HtmlToSvgFixtures & HtmlToSvgOptions>({
       const recorder = recorderFor(target.context());
       const dir = testInfo.outputPath("svg-snapshots", name);
       await capture(target, dir, await styles(htmlToSvgBinary), recorder);
-      const { svg, report } = await convert(htmlToSvgBinary, dir);
+      const { svg, report } = await convert(htmlToSvgBinary, dir, htmlToSvgAssetsDir);
       await testInfo.attach(`${name}.svg`, { body: svg, contentType: "image/svg+xml" });
       return { svg, report, dir };
     });

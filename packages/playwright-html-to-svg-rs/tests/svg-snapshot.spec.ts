@@ -3,9 +3,10 @@
 // close the SVG is to Chrome is the Rust tests' job; the pixel check here only catches gross
 // breakage (wrong scale, blank or shifted output).
 
-import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
@@ -18,7 +19,7 @@ const WEB_FONT = createRequire(import.meta.url).resolve(
   "@fontsource/pacifico/files/pacifico-latin-400-normal.woff2",
 );
 
-/** A 160x90 gradient: an image the page downloads, drawn by an `<img>`. */
+/** A 160x90 gradient: an image the page downloads, drawn by an `<img>` and as a background. */
 function photo(): Buffer {
   const png = new PNG({ width: 160, height: 90 });
   for (let y = 0; y < 90; y++) {
@@ -38,7 +39,9 @@ test.beforeEach(async ({ page }) => {
     if (path === "/fonts/pacifico.woff2") {
       return route.fulfill({ body: await readFile(WEB_FONT), contentType: "font/woff2" });
     }
-    if (path === "/photo.png") return route.fulfill({ body: photo(), contentType: "image/png" });
+    if (path === "/photo.png" || path === "/banner.png") {
+      return route.fulfill({ body: photo(), contentType: "image/png" });
+    }
     const body = await readFile(new URL(path.slice(1), PAGES));
     const contentType = path.endsWith(".svg") ? "image/svg+xml" : "text/html";
     return route.fulfill({ body, contentType });
@@ -72,7 +75,9 @@ test("the conversion finds every font and image the page used", async ({ svgSnap
   expect(faces).toContainEqual(expect.objectContaining({ family: "Pacifico", custom: true }));
 
   const images = JSON.parse(await readFile(join(dir, "images.json"), "utf8"));
-  expect(Object.keys(images.images).sort()).toEqual([`${ORIGIN}/dots.svg`, `${ORIGIN}/photo.png`]);
+  expect(Object.keys(images.images).sort()).toEqual(
+    ["/banner.png", "/dots.svg", "/photo.png"].map((p) => ORIGIN + p),
+  );
 });
 
 test("<img> and <canvas> are cropped from Chrome's screenshot", async ({ svgSnapshot }) => {
@@ -80,7 +85,8 @@ test("<img> and <canvas> are cropped from Chrome's screenshot", async ({ svgSnap
 
   const fallbacks = report.report.raster_fallbacks.map((f) => f.split(" ")[0]);
   expect(fallbacks.sort()).toEqual(["<canvas>", "<img>"]);
-  expect(svg.match(/<image\b/g)?.length).toBe(2);
+  // The two crops, and the banner's downloaded background image.
+  expect(svg.match(/<image\b/g)?.length).toBe(3);
 });
 
 test("the SVG, drawn by Chrome, looks like the page", async ({ page, svgSnapshot }) => {
@@ -104,4 +110,37 @@ test("the SVG, drawn by Chrome, looks like the page", async ({ page, svgSnapshot
   await test.info().attach("diff.png", { body: PNG.sync.write(diff), contentType: "image/png" });
   const share = differing / (original.width * original.height);
   expect(share, `${(share * 100).toFixed(2)}% of pixels differ`).toBeLessThan(0.02);
+});
+
+test.describe("with htmlToSvgAssetsDir", () => {
+  test.use({
+    htmlToSvgAssetsDir: async ({}, use, testInfo) => use(testInfo.outputPath("assets")),
+  });
+
+  test("images are shared files named by content hash", async ({ svgSnapshot }, testInfo) => {
+    const first = await svgSnapshot("first");
+    const second = await svgSnapshot("second");
+    const assetsDir = testInfo.outputPath("assets");
+
+    // Nothing inlined; both SVGs link the same files, and each file exists once.
+    for (const { svg } of [first, second]) expect(svg).not.toContain("data:image/png");
+    expect(second.report.assets).toEqual(first.report.assets);
+    expect((await readdir(assetsDir)).sort()).toEqual([...first.report.assets].sort());
+    for (const name of first.report.assets) expect(name).toMatch(/^[0-9a-f]{64}\.png$/);
+
+    // Every link resolves from the SVG's own folder to a file whose name is its content's hash.
+    const hrefs = [...first.svg.matchAll(/href="([^"#][^"]*)"/g)].map((m) => m[1]);
+    expect(hrefs.length).toBeGreaterThan(0);
+    for (const href of hrefs) {
+      const file = resolve(first.dir, href);
+      expect(dirname(file)).toBe(assetsDir);
+      const bytes = await readFile(file);
+      expect(file).toContain(createHash("sha256").update(bytes).digest("hex"));
+    }
+
+    // The downloaded background is stored as the bytes the server sent, not re-encoded: the
+    // same image on another page or in another test run is the same file.
+    const banner = `${createHash("sha256").update(photo()).digest("hex")}.png`;
+    expect(first.report.assets).toContain(banner);
+  });
 });

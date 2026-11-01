@@ -15,10 +15,14 @@ pub struct Score {
     pub misplaced: f64,
 }
 
-/// Renders an SVG with resvg (an independent renderer, not Takumi) at the given size.
-pub fn rasterize_svg(svg: &str, (w, h): (u32, u32)) -> Result<Pixmap> {
-    let tree =
-        resvg::usvg::Tree::from_str(svg, &resvg::usvg::Options::default()).context("parse SVG")?;
+/// Renders an SVG with resvg (an independent renderer, not Takumi) at the given size. Relative
+/// links (externalized assets) are resolved from `dir`, where the SVG lives.
+pub fn rasterize_svg(svg: &str, dir: &Path, (w, h): (u32, u32)) -> Result<Pixmap> {
+    let options = resvg::usvg::Options {
+        resources_dir: Some(dir.to_owned()),
+        ..resvg::usvg::Options::default()
+    };
+    let tree = resvg::usvg::Tree::from_str(svg, &options).context("parse SVG")?;
     let mut pixmap = Pixmap::new(w, h).context("pixmap size")?;
     pixmap.fill(resvg::tiny_skia::Color::WHITE);
     resvg::render(
