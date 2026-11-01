@@ -50,7 +50,8 @@ SVG attached to the test report then needs the folder next to it to show its ima
 ## Tests
 
 `pnpm test` builds the debug binary and runs `tests/` on Chromium, Chromium at 2x and Chrome
-(`just test` at the repository root runs them in the test container). They test the glue, not the
+(`just test` at the repository root runs them in the test container), against the pages of
+`packages/test-fixtures`, which Playwright builds and serves with Vite. They test the glue, not the
 converter's accuracy (that is the Rust tests' job): `data-*` attributes reach the SVG; the web
 font and images the page downloaded are saved and used; `<img>` and `<canvas>` are cropped from
 the screenshot; and, as a coarse check, the SVG drawn back by Chrome differs from Chrome's picture

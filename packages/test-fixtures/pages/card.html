@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Card fixture</title>
+<link rel="stylesheet" href="./card.css">
+</head>
+<body>
+  <div class="row">
+    <section class="card" data-testid="summary">
+      <h2>Weekly summary</h2>
+      <div class="hero"></div>
+      <p>Revenue rose by <strong>12.4%</strong> compared with last week, while costs stayed flat.</p>
+      <span class="badge" data-testid="badge">New</span>
+    </section>
+    <section class="card" data-testid="regions">
+      <h2>Regions</h2>
+      <table>
+        <tr><th>Region</th><th>Orders</th></tr>
+        <tr data-testid="row-eu"><td>Europe</td><td>1,204</td></tr>
+        <tr><td>Americas</td><td>987</td></tr>
+        <tr><td>Asia</td><td>1,530</td></tr>
+      </table>
+      <div class="dots" data-testid="dots"></div>
+    </section>
+  </div>
+  <section class="card media" data-testid="media">
+    <h2 class="script" data-testid="web-font">Handwritten heading</h2>
+    <img src="/photo.png" width="160" height="90" alt="" data-testid="photo">
+    <canvas width="160" height="90" data-testid="chart"></canvas>
+    <div class="banner" data-testid="banner"></div>
+  </section>
+  <script type="module" src="./card.ts"></script>
+</body>
+</html>

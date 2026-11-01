@@ -5,7 +5,6 @@
 
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 
 import pixelmatch from "pixelmatch";
@@ -13,47 +12,20 @@ import { PNG } from "pngjs";
 
 import { expect, test } from "../src/index.js";
 
-const ORIGIN = "https://html-to-svg.test";
-const PAGES = new URL("./pages/", import.meta.url);
-const WEB_FONT = createRequire(import.meta.url).resolve(
-  "@fontsource/pacifico/files/pacifico-latin-400-normal.woff2",
-);
+/** Files the fixtures app serves as they are (`packages/test-fixtures/public`). */
+const PUBLIC = new URL("../../test-fixtures/public/", import.meta.url);
 
-/** A 160x90 gradient: an image the page downloads, drawn by an `<img>` and as a background. */
-function photo(): Buffer {
-  const png = new PNG({ width: 160, height: 90 });
-  for (let y = 0; y < 90; y++) {
-    for (let x = 0; x < 160; x++) {
-      const i = (y * 160 + x) * 4;
-      png.data.set([x + 60, y * 2 + 40, 200 - x, 255], i);
-    }
-  }
-  return PNG.sync.write(png);
-}
-
-// Serve tests/pages from a made-up origin: the font and images are then real network responses,
-// which the capture has to save for the conversion to use them.
+// The card fixture (`packages/test-fixtures/pages/card.html`), served by Vite (playwright.config.ts):
+// its web font and images are real network responses, which the capture has to save.
 test.beforeEach(async ({ page }) => {
-  await page.route(`${ORIGIN}/**`, async (route) => {
-    const path = new URL(route.request().url()).pathname;
-    if (path === "/fonts/pacifico.woff2") {
-      return route.fulfill({ body: await readFile(WEB_FONT), contentType: "font/woff2" });
-    }
-    if (path === "/photo.png" || path === "/banner.png") {
-      return route.fulfill({ body: photo(), contentType: "image/png" });
-    }
-    const body = await readFile(new URL(path.slice(1), PAGES));
-    const contentType = path.endsWith(".svg") ? "image/svg+xml" : "text/html";
-    return route.fulfill({ body, contentType });
-  });
-  await page.goto(`${ORIGIN}/card.html`);
+  await page.goto("/card.html");
 });
 
 test("the SVG keeps the page's data-* attributes", async ({ svgSnapshot }) => {
   const { svg } = await svgSnapshot("card");
 
   expect(svg.startsWith("<svg")).toBe(true);
-  for (const id of ["summary", "badge", "regions", "row-eu", "dots", "web-font", "photo", "chart"]) {
+  for (const id of ["summary", "badge", "regions", "row-eu", "dots", "web-font", "photo", "chart", "banner"]) {
     expect(svg, `data-testid="${id}"`).toContain(`data-testid="${id}"`);
   }
   expect(svg).not.toContain("data-takumi-node");
@@ -69,15 +41,17 @@ test("the conversion finds every font and image the page used", async ({ svgSnap
   // Nothing was left undrawn (a background url() that was not captured would warn).
   expect(report.report.warnings).toEqual([]);
 
+  // Only the subset the page's text needs is downloaded (Vite names it with a content hash).
   const fonts = JSON.parse(await readFile(join(dir, "fonts.json"), "utf8"));
-  expect(Object.values(fonts.web)).toContain(`${ORIGIN}/fonts/pacifico.woff2`);
+  expect(Object.values(fonts.web)).toEqual([
+    expect.stringMatching(/\/assets\/pacifico-latin-400-normal-[\w-]+\.woff2$/),
+  ]);
   const faces = Object.values(fonts.used).flat() as { family: string; custom: boolean }[];
   expect(faces).toContainEqual(expect.objectContaining({ family: "Pacifico", custom: true }));
 
   const images = JSON.parse(await readFile(join(dir, "images.json"), "utf8"));
-  expect(Object.keys(images.images).sort()).toEqual(
-    ["/banner.png", "/dots.svg", "/photo.png"].map((p) => ORIGIN + p),
-  );
+  const paths = Object.keys(images.images).map((url) => new URL(url).pathname);
+  expect(paths.sort()).toEqual(["/dots.svg", "/photo.png", "/stripes.png"]);
 });
 
 test("<img> and <canvas> are cropped from Chrome's screenshot", async ({ svgSnapshot }) => {
@@ -140,7 +114,8 @@ test.describe("with htmlToSvgAssetsDir", () => {
 
     // The downloaded background is stored as the bytes the server sent, not re-encoded: the
     // same image on another page or in another test run is the same file.
-    const banner = `${createHash("sha256").update(photo()).digest("hex")}.png`;
+    const stripes = await readFile(new URL("stripes.png", PUBLIC));
+    const banner = `${createHash("sha256").update(stripes).digest("hex")}.png`;
     expect(first.report.assets).toContain(banner);
   });
 });

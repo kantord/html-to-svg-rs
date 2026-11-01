@@ -9,10 +9,18 @@ const binary =
   process.env.HTML_TO_SVG_BIN ??
   fileURLToPath(new URL("../../target/debug/html-to-svg", import.meta.url));
 
+// The fixture pages (`packages/test-fixtures`), built and served by Vite on its fixed port.
+const FIXTURES = "http://localhost:5199";
+
 export default defineConfig<HtmlToSvgOptions>({
   testDir: "tests",
   reporter: process.env.CI ? "github" : "list",
-  use: { htmlToSvgBinary: binary, viewport: { width: 800, height: 800 } },
+  webServer: {
+    command: "pnpm --filter test-fixtures build && pnpm --filter test-fixtures preview",
+    url: `${FIXTURES}/index.html`,
+    reuseExistingServer: !process.env.CI,
+  },
+  use: { baseURL: FIXTURES, htmlToSvgBinary: binary, viewport: { width: 800, height: 800 } },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 800, height: 800 } } },
     {
