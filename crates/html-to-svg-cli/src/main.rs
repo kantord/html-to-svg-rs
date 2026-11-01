@@ -9,6 +9,8 @@
 //!                         registered by themselves; --font adds more)
 //! html-to-svg diff <dir>   out.svg (via resvg) and takumi.png vs chrome.png
 //! html-to-svg run <url> <dir> [any of the above]   all three
+//! html-to-svg styles      the computed styles a capture asks Chrome for, as a JSON array
+//!                         (for captures made outside this binary, e.g. from Playwright)
 //! ```
 
 mod diff;
@@ -62,6 +64,10 @@ async fn main() -> Result<()> {
         ["capture", url, dir] => capture(url, Path::new(dir), &args).await,
         ["convert", dir] => convert(Path::new(dir), &args),
         ["diff", dir] => diff(Path::new(dir)),
+        ["styles"] => {
+            println!("{}", serde_json::to_string(html_to_svg_rs::STYLES)?);
+            Ok(())
+        }
         ["run", url, dir] => {
             capture(url, Path::new(dir), &args).await?;
             convert(Path::new(dir), &args)?;

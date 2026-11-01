@@ -20,6 +20,8 @@ use takumi::prelude::*;
 
 pub use fonts::Registered as RegisteredFonts;
 pub use lower::Report;
+/// The computed styles a capture must ask Chrome for (`DOMSnapshot.captureSnapshot`), in order.
+pub use snapshot::STYLES;
 
 /// What [`convert`] needs besides the capture directory.
 pub struct ConvertOptions {

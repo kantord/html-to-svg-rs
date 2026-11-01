@@ -685,6 +685,7 @@ dependencies = [
  "anyhow",
  "html-to-svg-rs",
  "resvg",
+ "serde_json",
  "tokio",
 ]
 

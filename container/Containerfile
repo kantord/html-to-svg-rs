@@ -1,0 +1,37 @@
+# One environment for every test, Rust and Node alike: the same Chromium, Chrome, fonts and
+# fontconfig on every run, so a changed score means changed code. `just test` builds and runs it.
+#
+# The base image's Chromium matches @playwright/test 1.64.1 (keep the tag and the package in step).
+FROM mcr.microsoft.com/playwright:v1.64.1-noble
+
+# A C toolchain for Rust's build scripts; fontconfig's fc-list (the converter finds system fonts
+# with it); the fonts the committed Rust fixture was captured with.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      build-essential pkg-config ca-certificates curl fontconfig fonts-dejavu-core fonts-inter \
+ && rm -rf /var/lib/apt/lists/* \
+ && fc-cache -f
+
+# Google Chrome, for the Playwright `chrome` project.
+RUN npx -y playwright@1.64.1 install chrome
+
+# Rust, at the version rust-toolchain.toml pins.
+ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo PATH=/opt/cargo/bin:$PATH
+COPY rust-toolchain.toml /tmp/rust-toolchain.toml
+RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal \
+      --default-toolchain "$(sed -n 's/^channel = "\(.*\)"/\1/p' /tmp/rust-toolchain.toml)" \
+      --component clippy,rustfmt \
+ && rm /tmp/rust-toolchain.toml
+
+# pnpm, at the version package.json pins.
+COPY package.json /tmp/package.json
+RUN corepack enable \
+ && corepack install -g "$(node -p 'require("/tmp/package.json").packageManager')" \
+ && rm /tmp/package.json
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+
+# Inside this image a missing font is an error, not a reason to skip a test.
+ENV HTML_TO_SVG_TEST_ENV=container
+# Build output lives on a volume (see justfile), apart from the host's target/.
+ENV CARGO_TARGET_DIR=/cache/target HTML_TO_SVG_BIN=/cache/target/debug/html-to-svg
+WORKDIR /work

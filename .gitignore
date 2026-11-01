@@ -25,3 +25,9 @@ rustc-ice-*.txt
 
 # html-to-svg output
 /crates/*/out/
+
+# pnpm
+node_modules/
+dist/
+test-results/
+playwright-report/

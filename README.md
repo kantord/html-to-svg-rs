@@ -19,8 +19,23 @@ Two crates:
 - `crates/html-to-svg-cli`: the `html-to-svg` binary, plus the `diff` step, the test pages and the
   end-to-end test.
 
+- `packages/playwright-html-to-svg-rs`: a Playwright fixture, `svgSnapshot(name)`, that captures
+  the page under test over CDP and converts it with the binary (pnpm workspace; see its README).
+
 The patched takumi-svg lives at the workspace root (`vendor/`, wired in by `[patch.crates-io]` in
 the root `Cargo.toml`).
+
+## Tests
+
+```bash
+just test
+```
+
+runs every check (Rust fmt, clippy and tests; the Playwright tests on Chromium, Chromium at 2x and
+Chrome) in one podman container (`container/Containerfile`): the same Chromium, Chrome, fonts and
+fontconfig on every run, so a changed score means changed code. Inside it, a test that needs a
+missing font fails instead of skipping. `just test-shell` opens a shell with the same mounts. The
+first run builds the image and compiles everything (several minutes); caches live on podman volumes.
 
 ## Run it
 

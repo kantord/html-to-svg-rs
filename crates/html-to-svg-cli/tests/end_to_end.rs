@@ -49,6 +49,11 @@ fn number_after(text: &str, line_start: &str, label: &str) -> f64 {
 fn dashboard_converts_close_to_chrome_with_annotations() {
     // The fixture was captured with Inter and DejaVu Sans Mono; other fonts would not compare.
     if fonts().is_none() {
+        // The test container (`just test`) has them: there, a missing font is a failure.
+        assert!(
+            std::env::var("HTML_TO_SVG_TEST_ENV").as_deref() != Ok("container"),
+            "the Inter and DejaVu Sans Mono font files are missing from the test container"
+        );
         eprintln!("skipped: the Inter and DejaVu Sans Mono font files are not installed");
         return;
     }
