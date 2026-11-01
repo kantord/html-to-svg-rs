@@ -54,8 +54,13 @@ first run builds the image and compiles everything (several minutes); caches liv
   tag. It uses no cache, so nothing a pull request could write reaches a published binary.
 - Every action is pinned by commit, every job has only the permissions it needs, and checkouts
   keep no token.
-- `renovate.json` keeps dependencies current: updates wait 3 days after release (security fixes do
-  not); Cargo dependencies are pinned to exact versions; takumi (and the patched takumi-svg in
+- Every dependency is at least 3 days old: Renovate waits that long before proposing an update
+  (security fixes do not wait, and digest updates have no release date to wait for); pnpm refuses
+  younger packages, transitive ones too (`minimumReleaseAge` in `pnpm-workspace.yaml`); and
+  `scripts/release-age.py` does the same for `Cargo.lock` in CI, as Cargo has no such setting.
+  Exceptions are exact versions, with their reason (`release-age.toml`,
+  `minimumReleaseAgeExclude`).
+- `renovate.json` keeps dependencies current: Cargo dependencies are pinned to exact versions; takumi (and the patched takumi-svg in
   `vendor/`) moves only on approval, by hand; Playwright, napi-rs and the Rust toolchain each move
   as one group. Tool versions shared by the npm packages live once, in the pnpm catalog
   (`pnpm-workspace.yaml`).

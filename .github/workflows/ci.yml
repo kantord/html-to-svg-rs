@@ -1,9 +1,12 @@
 # Every check of the repository, on each push to main and each pull request:
 #
-#   rust      fmt, clippy (warnings are errors), every Rust test
-#   deny      cargo-deny: vulnerabilities and unmaintained crates, licences, crate sources
-#   node      pnpm audit, typecheck, the npm package's tests, the Playwright tests
-#   zizmor    the workflows themselves, for injection, credential and pinning mistakes
+#   rust         fmt, clippy (warnings are errors), every Rust test
+#   deny         cargo-deny: vulnerabilities and unmaintained crates, licences, crate sources
+#   release-age  every crate in Cargo.lock is at least 3 days old (scripts/release-age.py; for
+#                npm, pnpm itself refuses younger packages: minimumReleaseAge in
+#                pnpm-workspace.yaml, enforced by the node job's install)
+#   node         pnpm audit, typecheck, the npm package's tests, the Playwright tests
+#   zizmor       the workflows themselves, for injection, credential and pinning mistakes
 #
 # The npm package's native builds per platform are .github/workflows/npm.yml.
 #
@@ -64,8 +67,35 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: taiki-e/install-action@718993db25d12d67fe704d6aa97369e03d3803c8 # cargo-deny
+      - uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # cargo-deny
       - run: cargo deny check
+
+  release-age:
+    name: Release age (Cargo.lock)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The previous commit, to compare Cargo.lock with on a push.
+          fetch-depth: 2
+      # Only what this change adds is checked (crates.io allows about one request a second):
+      # against the base branch for a pull request, the previous commit for a push, everything
+      # for a manual run.
+      - name: Check
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          case "$EVENT" in
+            pull_request)
+              git fetch --no-tags --depth=1 origin "$BASE"
+              python3 scripts/release-age.py --since FETCH_HEAD ;;
+            push) python3 scripts/release-age.py --since HEAD^ ;;
+            *) python3 scripts/release-age.py --all ;;
+          esac
 
   node:
     name: Node (audit, types, tests)

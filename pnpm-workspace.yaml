@@ -1,6 +1,12 @@
 packages:
   - "packages/*"
 
+# Supply-chain hardening, as in enwiro: refuse to install any package version (transitive ones
+# too) published less than 3 days ago. The same age as renovate.json's minimumReleaseAge and
+# scripts/release-age.py's for Cargo.lock: every dependency of the repository is at least 3 days
+# old. An exception is an exact version in minimumReleaseAgeExclude, with a comment saying why.
+minimumReleaseAge: 4320
+
 # One version of each tool shared by the packages: they refer to it as `"catalog:"`.
 catalog:
   "@napi-rs/cli": 3.10.9

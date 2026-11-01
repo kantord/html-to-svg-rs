@@ -1,0 +1,22 @@
+# Exceptions to the minimum release age of 3 days that scripts/release-age.py enforces for
+# Cargo.lock (pnpm's are `minimumReleaseAgeExclude` in pnpm-workspace.yaml). Each is one exact
+# version, with the reason; a newer version of the same crate is not excepted.
+#
+# [[cargo.exception]]
+# crate = "name@1.2.3"
+# reason = "why it cannot wait"
+
+# takumi and the two crates released with it. Moving to the previous takumi (2.18) means replacing
+# the patched takumi-svg in vendor/ too, for a release that is past the age within hours of this
+# entry (2026-11-01). These lines are dead once it is: remove them with the next takumi update.
+[[cargo.exception]]
+crate = "takumi@2.19.0"
+reason = "kept: going back to 2.18 means re-vendoring the patched takumi-svg (vendor/README.md)"
+
+[[cargo.exception]]
+crate = "takumi-core@0.35.0"
+reason = "released with takumi 2.19.0"
+
+[[cargo.exception]]
+crate = "takumi-raster@0.6.0"
+reason = "released with takumi 2.19.0"
