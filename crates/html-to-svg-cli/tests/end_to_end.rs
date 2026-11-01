@@ -1,6 +1,6 @@
 //! The whole conversion on a committed Chrome capture of `pages/dashboard.html`, without a
 //! browser: snapshot -> Takumi -> SVG, then the SVG (rendered by resvg) against Chrome's pixels.
-//! Recapture the fixture with `chrome-svg capture pages/dashboard.html <dir> --size 1024x640`.
+//! Recapture the fixture with `html-to-svg capture pages/dashboard.html <dir> --size 1024x640`.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -18,13 +18,13 @@ fn fonts() -> Option<Vec<String>> {
 }
 
 fn run(args: &[&str]) -> String {
-    let out = Command::new(env!("CARGO_BIN_EXE_chrome-svg"))
+    let out = Command::new(env!("CARGO_BIN_EXE_html-to-svg"))
         .args(args)
         .output()
-        .expect("run chrome-svg");
+        .expect("run html-to-svg");
     assert!(
         out.status.success(),
-        "chrome-svg {args:?} failed:\n{}",
+        "html-to-svg {args:?} failed:\n{}",
         String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8(out.stdout).expect("utf-8 output")

@@ -169,23 +169,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 
 [[package]]
-name = "chrome-svg"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "chromiumoxide",
- "futures",
- "resvg",
- "serde",
- "serde_json",
- "takumi",
- "tokio",
- "ttf-parser",
- "wuff",
-]
-
-[[package]]
 name = "chromiumoxide"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -694,6 +677,33 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
+name = "html-to-svg-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "html-to-svg-rs",
+ "resvg",
+ "tokio",
+]
+
+[[package]]
+name = "html-to-svg-rs"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "chromiumoxide",
+ "futures",
+ "resvg",
+ "serde",
+ "serde_json",
+ "takumi",
+ "tokio",
+ "ttf-parser",
+ "wuff",
+]
 
 [[package]]
 name = "http"

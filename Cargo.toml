@@ -3,6 +3,6 @@ resolver = "3"
 members = ["crates/*"]
 
 # Carries node ids into the SVG output (see vendor/takumi-svg-annotations.patch and
-# crates/chrome-svg/README.md).
+# README.md).
 [patch.crates-io]
 takumi-svg = { path = "vendor/takumi-svg" }

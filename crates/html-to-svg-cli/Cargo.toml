@@ -1,0 +1,15 @@
+[package]
+name = "html-to-svg-cli"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "html-to-svg"
+path = "src/main.rs"
+
+[dependencies]
+html-to-svg-rs = { path = "../html-to-svg-rs" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+anyhow = "1"
+resvg = "0.45"

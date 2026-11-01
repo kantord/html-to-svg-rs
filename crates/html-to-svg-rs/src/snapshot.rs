@@ -219,7 +219,7 @@ impl Page {
         let raw: Raw = serde_json::from_str(json).context("parse DOMSnapshot JSON")?;
         let doc = raw.documents.first().context("snapshot has no documents")?;
         let names = raw.computed_styles.as_deref().context(
-            "snapshot.json has no `computedStyles` list (captured by an older chrome-svg); capture it again",
+            "snapshot.json has no `computedStyles` list (captured by an older html-to-svg); capture it again",
         )?;
         let s = |i: i64| -> &str {
             usize::try_from(i)

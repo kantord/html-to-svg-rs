@@ -1,29 +1,23 @@
-//! chrome-svg: Chrome lays a page out, Takumi paints Chrome's boxes into SVG.
+//! html-to-svg: Chrome lays a page out, Takumi paints Chrome's boxes into SVG
+//! (the `html-to-svg-rs` library does the work).
 //!
 //! ```text
-//! chrome-svg capture <url> <dir> [--size WxH] [--settle SECONDS]
+//! html-to-svg capture <url> <dir> [--size WxH] [--settle SECONDS]
 //!                         Chrome -> dir/snapshot.json, chrome.png, fonts.json, fonts/
-//! chrome-svg convert <dir> [--font F]... [--no-fit]
+//! html-to-svg convert <dir> [--font F]... [--no-fit]
 //!                         snapshot -> dir/out.svg + dir/takumi.png (fonts.json's faces are
 //!                         registered by themselves; --font adds more)
-//! chrome-svg diff <dir>   out.svg (via resvg) and takumi.png vs chrome.png
-//! chrome-svg run <url> <dir> [any of the above]   all three
+//! html-to-svg diff <dir>   out.svg (via resvg) and takumi.png vs chrome.png
+//! html-to-svg run <url> <dir> [any of the above]   all three
 //! ```
 
-mod annotate;
-mod capture;
 mod diff;
-mod fonts;
-mod geometry;
-mod lower;
-mod resources;
-mod snapshot;
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use html_to_svg_rs::{ConvertOptions, Report, capture};
 use resvg::tiny_skia::Pixmap;
-use takumi::prelude::*;
 
 struct Args {
     positional: Vec<String>,
@@ -102,26 +96,15 @@ async fn capture(url: &str, dir: &Path, args: &Args) -> Result<()> {
 }
 
 fn convert(dir: &Path, args: &Args) -> Result<()> {
-    let page = snapshot::Page::decode(&std::fs::read_to_string(dir.join("snapshot.json"))?)?;
-    let screenshot = Pixmap::load_png(dir.join("chrome.png")).ok();
-    let viewport = screenshot
-        .as_ref()
-        .map(|s| (s.width(), s.height()))
-        .unwrap_or(args.size);
-
-    // Takumi reads no system fonts: register the same files Chrome used.
-    let mut fonts = Fonts::default();
-    for path in &args.fonts {
-        let bytes = std::fs::read(path).with_context(|| format!("read font {}", path.display()))?;
-        fonts
-            .register(FontResource::new(bytes))
-            .with_context(|| format!("register {}", path.display()))?;
-    }
-    let used = match std::fs::read(dir.join("fonts.json")) {
-        Ok(bytes) => serde_json::from_slice(&bytes).context("parse fonts.json")?,
-        Err(_) => fonts::FontsFile::default(),
-    };
-    let registered = fonts::register(dir, &used, &mut fonts);
+    let conversion = html_to_svg_rs::convert(
+        dir,
+        &ConvertOptions {
+            extra_fonts: args.fonts.clone(),
+            fit_text: args.fit_text,
+            fallback_size: args.size,
+        },
+    )?;
+    let registered = &conversion.fonts;
     println!(
         "fonts: {} face(s) Chrome used registered{}",
         registered.faces,
@@ -134,49 +117,14 @@ fn convert(dir: &Path, args: &Args) -> Result<()> {
     if args.fonts.is_empty() && registered.faces == 0 {
         eprintln!("warning: no fonts (no fonts.json, no --font); Takumi draws no text");
     }
-
-    let images = resources::data_urls(dir);
-    let lowered = lower::lower(
-        &page,
-        lower::Options {
-            fonts: &fonts,
-            fit_text: args.fit_text,
-            screenshot: screenshot.as_ref(),
-            viewport,
-            used_fonts: &used.used,
-            images: &images,
-        },
-    );
-
-    let svg = takumi::render_svg(
-        SvgOptions::builder()
-            .viewport(Viewport::new(viewport))
-            .fonts(&fonts)
-            .node(lowered.root.clone())
-            .build(),
-    )?;
-    std::fs::write(
-        dir.join("out.svg"),
-        annotate::apply(&svg, &lowered.annotations),
-    )?;
-
-    let image = takumi::render(
-        RenderOptions::builder()
-            .viewport(Viewport::new(viewport))
-            .node(lowered.root)
-            .fonts(&fonts)
-            .build(),
-    )?;
-    let mut png = Vec::new();
-    takumi::write_image(&image, &mut png, OutputFormat::Png)?;
-    std::fs::write(dir.join("takumi.png"), png)?;
-
-    print_report(&lowered.report);
+    std::fs::write(dir.join("out.svg"), &conversion.svg)?;
+    std::fs::write(dir.join("takumi.png"), &conversion.png)?;
+    print_report(&conversion.report);
     println!("wrote {0}/out.svg, {0}/takumi.png", dir.display());
     Ok(())
 }
 
-fn print_report(r: &lower::Report) {
+fn print_report(r: &Report) {
     let stats = |v: &[f64]| {
         let mean = v.iter().sum::<f64>() / v.len().max(1) as f64;
         let max = v.iter().copied().fold(0.0, f64::max);
